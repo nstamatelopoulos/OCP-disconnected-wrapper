@@ -1,0 +1,17 @@
+apiVersion: mirror.openshift.io/v1alpha1
+kind: ImageSetConfiguration
+storageConfig:
+ registry:
+   imageURL: example.com/example/oc-mirror
+mirror:
+  ocp:
+    channels:
+      - name: stable-4.10
+  operators:
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10
+      headsOnly: false
+      packages:
+        - name: rhacs-operator
+          channels:
+          - name: latest
+          startingVersion: 3.67.0

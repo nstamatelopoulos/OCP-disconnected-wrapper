@@ -1,0 +1,62 @@
+#!/bin/bash 
+
+echo "Creating root directory"
+
+mkdir /home/ec2-user/registry-stuff && cd /home/ec2-user/registry-stuff
+
+echo "Installing podman and wget"
+
+sudo yum install wget -y -q
+sudo yum install podman -y -q
+
+echo "Getting mirror-registry package"
+
+wget -q https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/latest/mirror-registry.tar.gz
+
+echo "Unpacking the tar file"
+
+tar -xf mirror-registry.tar.gz
+
+echo "Installing mirror-registry"
+
+sudo ./mirror-registry install --quayHostname=$(REGISTRY_URL) --quayRoot=/home/ec2-user/registry-stuff > registry-install.log
+
+echo "Get the password for the registry"
+
+password=$(cat registry-install.log | grep -o 'credentials (init, [^)]*)' | sed "s/credentials (init, \([^)]*\))/\1/")
+
+password_hash=$(echo -n "init:${password}" | base64 -w0)
+
+echo "Get the URL of the registry"
+
+log_line="$(cat registry-install.log | grep 'Quay is available')"
+
+registry_URL="${log_line#*https://}"
+registry_URL="${registry_URL%% *}"
+
+echo "Create the pull-secret with the credentials and store it under ./docker/config.json"
+
+mkdir ~/.docker
+
+cp ~/pull-secret.template ~/.docker/config.json
+
+sed -i "s/CREDENTIALS/$password_hash/g" ~/.docker/config.json
+sed -i "s/REGISTRY-HOSTNAME/$registry_URL/g" ~/.docker/config.json
+
+echo "Downloading oc-mirror"
+
+wget -q https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/oc-mirror.tar.gz
+
+tar -xf oc-mirror.tar.gz
+
+chmod +x oc-mirror
+
+echo "Adding the rootCA to the host so registry to be trusted"
+
+sudo cp /home/ec2-user/registry-stuff/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/
+
+sudo update-ca-trust
+
+echo "The registry is ready to mirror"
+
+echo "SSH command to registry host ssh -i ~/nstamate.pem ec2-user@$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)"
