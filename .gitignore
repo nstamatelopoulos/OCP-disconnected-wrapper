@@ -4,3 +4,5 @@ terraform.tfstate.backup
 .terraform.lock.hcl
 .terraform.tfstate.lock.info
 registry-mirror-script-terraform.sh
+/config/pull-secret.json
+pull-secret.template

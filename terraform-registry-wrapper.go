@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -15,6 +16,8 @@ const (
 	terraformConfigFile    = "./Disconnected.tf"
 	registryScriptTemplate = "./registry-mirror-script-terraform.sh.temp"
 	registryScript         = "./registry-mirror-script-terraform.sh"
+	pullSecret             = "./config/pull-secret.json"
+	pullSecretTemplate     = "./pull-secret.template"
 )
 
 func main() {
@@ -73,8 +76,18 @@ func runTerraform(mode string) error {
 
 func installOrDestroyRegistry(installFlag bool, private bool) {
 	if installFlag {
-		// Update the Terraform configuration file with the user-provided region
+		cmd := exec.Command("terraform", "init")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		cmd.Run()
+		// Delete left over templates
+		deleteGeneratedFiles()
+		//Create new PullSecretTemplate
+		createPullSecretTemplate(pullSecret)
+		//Update the Bash Script with the provided information from the user.
 		updateBashScript(private)
+		// Update the region in the terraform file.
 		/*if region != "" {
 			err := updateTerraformConfig(region)
 			if err != nil {
@@ -89,11 +102,12 @@ func installOrDestroyRegistry(installFlag bool, private bool) {
 		if err != nil {
 			log.Fatalf("Failed to execute terraform apply: %v", err)
 		}
-		deleteGeneratedScriptFile()
+
 		return
 	} else {
 		mode := "destroy"
 		// Run the terraform command
+		deleteGeneratedFiles()
 		err := runTerraform(mode)
 		if err != nil {
 			log.Fatalf("Failed to execute terraform destroy: %v", err)
@@ -130,11 +144,40 @@ func updateBashScript(private bool) error {
 }
 
 // To clean up the bash script generated file after successfull deployment of the registry.
-func deleteGeneratedScriptFile() {
-	err := os.Remove(registryScript)
-	if err != nil {
+func deleteGeneratedFiles() {
+	ScriptTemp := os.Remove(registryScript)
+	PullSecretTemp := os.Remove(pullSecretTemplate)
+
+	if ScriptTemp != nil || PullSecretTemp != nil {
 		// If an error occurs, print the error message
-		fmt.Println("Error deleting file:", err)
+		fmt.Println("one file is not deleted")
 		return
+	}
+}
+
+// It creates the pull Secret Template from the pull-secret.json provided by the user
+func createPullSecretTemplate(pullSecret string) {
+	// convert the string file to []byte and add it to data variable
+	data, _ := os.ReadFile(pullSecret)
+
+	// Parse the JSON data into a map[string]interface{}
+	var pullSecretMap map[string]interface{}
+	json.Unmarshal(data, &pullSecretMap)
+
+	// Add the new section under "auths"
+	auths := pullSecretMap["auths"].(map[string]interface{})
+	newAuth := map[string]interface{}{
+		"auth":  "CREDENTIALS",
+		"email": "registry@example.com",
+	}
+	auths["REGISTRY-HOSTNAME"] = newAuth
+
+	// Convert the updated pullSecretMap back to JSON
+	updatedData, _ := json.MarshalIndent(pullSecretMap, "", "  ")
+
+	// Write the updated JSON data to a separate file
+	err := os.WriteFile(pullSecretTemplate, updatedData, 0644)
+	if err != nil {
+		fmt.Println("Failed to create the pull-secret template file")
 	}
 }
