@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
@@ -25,7 +24,7 @@ func main() {
 	//region := flag.String("region", "", "Set the AWS region")
 	installFlag := flag.Bool("install", false, "Install Registry")
 	destroyFlag := flag.Bool("destroy", false, "Destroy Registry")
-	privateFlag := flag.Bool("private", false, "Publish registry with private or public hostname")
+	privateFlag := flag.Bool("private", false, "Publish registry with private or public hostname. Default value False")
 
 	flag.Parse()
 
@@ -62,7 +61,6 @@ func main() {
 // This function executes the terraform command, Can be either apply or destroy.
 func runTerraform(mode string) error {
 	cmd := exec.Command("terraform", mode, "-auto-approve")
-	cmd.Dir = filepath.Dir(terraformConfigFile)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
