@@ -59,4 +59,4 @@ sudo update-ca-trust
 
 echo "The registry is ready to mirror"
 
-echo "SSH command to registry host ssh -i ~/nstamate.pem ec2-user@$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)"
+echo "SSH command to registry host ssh -i ./config/awsRegistrySSHKey ec2-user@$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)"

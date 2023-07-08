@@ -11,12 +11,14 @@ import (
 )
 
 const (
-	//terraformTemplateFile  = "./Disconnected-template.tf.temp"
+	terraformTemplateFile  = "./Disconnected-template.tf.temp"
 	terraformConfigFile    = "./Disconnected.tf"
 	registryScriptTemplate = "./registry-mirror-script-terraform.sh.temp"
 	registryScript         = "./registry-mirror-script-terraform.sh"
 	pullSecret             = "./config/pull-secret.json"
 	pullSecretTemplate     = "./pull-secret.template"
+	publicKey              = "./config/awsRegistrySSHKey.pub"
+	privateKey             = "./config/awsRegistrySSHKey"
 )
 
 func main() {
@@ -85,6 +87,10 @@ func installOrDestroyRegistry(installFlag bool, private bool) {
 		createPullSecretTemplate(pullSecret)
 		//Update the Bash Script with the provided information from the user.
 		updateBashScript(private)
+		//Generate SSH key pair using ssh-keygen
+		GenerateSSHKey()
+		//Import the SSH public and private key to the terraform file to be used from instance creation and file provisioners.
+		importSSHKeyToTerraformfile()
 		// Update the region in the terraform file.
 		/*if region != "" {
 			err := updateTerraformConfig(region)
@@ -109,7 +115,9 @@ func installOrDestroyRegistry(installFlag bool, private bool) {
 		err := runTerraform(mode)
 		if err != nil {
 			log.Fatalf("Failed to execute terraform destroy: %v", err)
+			return
 		}
+		os.Remove(terraformConfigFile)
 		return
 
 	}
@@ -148,7 +156,7 @@ func deleteGeneratedFiles() {
 
 	if ScriptTemp != nil || PullSecretTemp != nil {
 		// If an error occurs, print the error message
-		fmt.Println("one file is not deleted")
+		//fmt.Println("one file is not deleted")
 		return
 	}
 }
@@ -177,5 +185,40 @@ func createPullSecretTemplate(pullSecret string) {
 	err := os.WriteFile(pullSecretTemplate, updatedData, 0644)
 	if err != nil {
 		fmt.Println("Failed to create the pull-secret template file")
+		return
+	}
+}
+
+func GenerateSSHKey() {
+	_, err := os.Stat(privateKey)
+	if err != nil {
+		cmd := exec.Command("ssh-keygen", "-t", "rsa", "-b", "2048", "-f", privateKey, "-q", "-N", "")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		err := cmd.Run()
+		if err != nil {
+			fmt.Println("SSH key failed to be generated because probably exists")
+			return
+		}
+	}
+}
+
+func importSSHKeyToTerraformfile() {
+	// Read the contents of the Terraform template file
+	templateContent, err := os.ReadFile(terraformTemplateFile)
+	if err != nil {
+		fmt.Println("Cannot read template file")
+		return
+	}
+	// Replace the placeholder string with the user-provided region
+	addPublicKeyPath := strings.ReplaceAll(string(templateContent), "PUBLIC_KEY_PATH", publicKey)
+	// Replace the Availability Zone according to the region provided
+	addPrivateKeyPath := strings.ReplaceAll(addPublicKeyPath, "PRIVATE_KEY_PATH", privateKey)
+	// Write the updated content to the Terraform configuration file
+	err = os.WriteFile(terraformConfigFile, []byte(addPrivateKeyPath), 0644)
+	if err != nil {
+		fmt.Println("Cannot write the Terraform config file")
+		return
 	}
 }

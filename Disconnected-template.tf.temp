@@ -1,5 +1,5 @@
 provider "aws" {
-  region = "Region-Value"
+  region = "eu-west-1"
 }
 
 resource "aws_vpc" "disconnected-vpc" {
@@ -16,7 +16,7 @@ resource "aws_vpc" "disconnected-vpc" {
 resource "aws_subnet" "registry-subnet" {
   vpc_id     = aws_vpc.disconnected-vpc.id
   cidr_block = "10.0.0.0/28"
-  availability_zone = "Availability-Zone"
+  availability_zone = "eu-west-1a"
   map_public_ip_on_launch = true
 
   tags = {
@@ -75,10 +75,20 @@ resource "aws_security_group" "registry-sg" {
   }
 }
 
+resource "random_string" "key_suffix" {
+  length  = 4
+  special = false
+}
+
+resource "aws_key_pair" "registry-key-pair" {
+  key_name   = "registry-key-${random_string.key_suffix.result}"
+  public_key = file("PUBLIC_KEY_PATH")
+}
+
 resource "aws_instance" "mirror-registry" {
   ami           = "ami-0f0f1c02e5e4d9d9f"
   instance_type = "c5.xlarge"
-  key_name      = "nstamate"
+  key_name      = aws_key_pair.registry-key-pair.key_name
 
   subnet_id     = aws_subnet.registry-subnet.id
   vpc_security_group_ids = [aws_security_group.registry-sg.id]
@@ -96,7 +106,7 @@ resource "aws_instance" "mirror-registry" {
       type        = "ssh"
       host        = self.public_ip
       user        = "ec2-user"
-      private_key = file("/home/nstamate/nstamate.pem")
+      private_key = file("PRIVATE_KEY_PATH")
     }
   }
 
@@ -106,7 +116,7 @@ resource "aws_instance" "mirror-registry" {
       type        = "ssh"
       host        = self.public_ip
       user        = "ec2-user"
-      private_key = file("/home/nstamate/nstamate.pem")
+      private_key = file("PRIVATE_KEY_PATH")
     }
   }
 
