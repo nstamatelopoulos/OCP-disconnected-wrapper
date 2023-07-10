@@ -13,7 +13,7 @@ Can be installed using the package manager of each distribution (yum, apt etc..)
 
 - AWS credentials (Access Key)
 Need to have AWS Credentials in ~/.aws/credentials file to be used from terraform when creating or destroying the infrastructure components.
-This can be set using AWS CLI command "aws configure" or manually add the credentials under "~/.aws/credentials" using the below format
+This can be set using AWS CLI command "aws configure" or manually add the credentials under ~/.aws/credentials using the below format:
 ~~~
 [default]
 aws_access_key_id = <key-id>
