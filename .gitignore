@@ -4,6 +4,6 @@ terraform.tfstate.backup
 .terraform.lock.hcl
 .terraform.tfstate.lock.info
 registry-mirror-script-terraform.sh
-config/
+config/*
 pull-secret.template
 Disconnected.tf
