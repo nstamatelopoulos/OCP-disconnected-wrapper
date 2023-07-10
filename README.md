@@ -5,7 +5,7 @@ This is a tool to quickly create a mirror registry for disconnected Openshift cl
 - Terraform
 - AWS credentials
 - Pull-Secret
-- Golang installed so to be able to run or compile the program.
+- Optional: Golang installed so to be able to run or compile the program.
 
 # How to setup
 - Terraform:
@@ -21,7 +21,7 @@ aws_secret_access_key = <key-value>
 ~~~
 
 - Pull-Secret
-The pull-secret need to be added inside the config directory and to have the name pull-secret.json in beautified format.
+The pull-secret needs to be added inside the config directory (create the directory until i commit it) and to have the name pull-secret.json in a beautified format (might work and oneliner too haven't tried yet).
 You can download your pull-secret from console.redhat.com and to beutify it using "jq" command. The below command should be sufficient:
 ~~~
 $ cat pull-secret.txt | jq > pull-secret.json
@@ -32,7 +32,7 @@ Please see how to download and setup Golang to your machine in [Golang Documenta
 # How to use
 
 1) Clone the repository and add in the config directory the pull-secret.json file as mentioned above.
-2) Run "go build terraform-registry-wrapper.go" to create a binary executable or "go run terraform-registry-wrapper.go" to run the program directly.
+2) Run the binary directly *./terraform-registry-wrapper --install* or use go to build "go build terraform-registry-wrapper.go" to create a binary executable or "go run terraform-registry-wrapper.go" to run the program directly.
 Options:
 - **terraform-registry-wrapper** --install # Install a mirror registry with a public URL so it can be used from connected clusters.
 - **terraform-registry-wrapper** --install --private # Install a mirror registry with a private URL. To be used in case one wants mirror-registry URL to be private.
