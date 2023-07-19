@@ -15,15 +15,15 @@ const (
 	terraformConfigFile    = "./Disconnected.tf"
 	registryScriptTemplate = "./registry-mirror-script-terraform.sh.temp"
 	registryScript         = "./registry-mirror-script-terraform.sh"
-	pullSecret             = "./config/pull-secret.json"
+	pullSecret             = "./config/pull-secret.json" // Need to get this using a flag from the user
 	pullSecretTemplate     = "./pull-secret.template"
-	publicKey              = "./config/awsRegistrySSHKey.pub"
-	privateKey             = "./config/awsRegistrySSHKey"
+	publicKey              = "./config/awsRegistrySSHKey.pub" // Uneeded constant. Need to get the public key from the user
+	privateKey             = "./config/awsRegistrySSHKey"     // Uneeded constant. No need to use a private key if i make the script run in the terraform "user-data"
 )
 
 func main() {
 	// Parse command-line arguments
-	//region := flag.String("region", "", "Set the AWS region")
+	//region := flag.String("region", "", "Set the AWS region")   // To be enabled in the future. Pending to create an mapping between AMI IDs and regions of the mirror registy instance image
 	installFlag := flag.Bool("install", false, "Install Registry")
 	destroyFlag := flag.Bool("destroy", false, "Destroy Registry")
 	privateFlag := flag.Bool("private", false, "Publish registry with private or public hostname. Default value False")
@@ -211,9 +211,9 @@ func importSSHKeyToTerraformfile() {
 		fmt.Println("Cannot read template file")
 		return
 	}
-	// Replace the placeholder string with the user-provided region
+	// Replace the placeholder string with the generated public key path
 	addPublicKeyPath := strings.ReplaceAll(string(templateContent), "PUBLIC_KEY_PATH", publicKey)
-	// Replace the Availability Zone according to the region provided
+	// Replace the placeholder string with the generated private key path
 	addPrivateKeyPath := strings.ReplaceAll(addPublicKeyPath, "PRIVATE_KEY_PATH", privateKey)
 	// Write the updated content to the Terraform configuration file
 	err = os.WriteFile(terraformConfigFile, []byte(addPrivateKeyPath), 0644)
