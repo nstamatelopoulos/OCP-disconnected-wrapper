@@ -27,6 +27,8 @@ func main() {
 	installFlag := flag.Bool("install", false, "Install Registry")
 	destroyFlag := flag.Bool("destroy", false, "Destroy Registry")
 	privateFlag := flag.Bool("private", false, "Publish registry with private or public hostname. Default value False")
+	pullSecretPath := flag.String("pull-secret", "", "Set the Path to the user pull-secret")
+	publicKeyPath := flag.String("public-key", "", "Set the path to the user public key")
 
 	flag.Parse()
 
@@ -84,7 +86,7 @@ func installOrDestroyRegistry(installFlag bool, private bool) {
 		// Delete left over templates
 		deleteGeneratedFiles()
 		//Create new PullSecretTemplate
-		createPullSecretTemplate(pullSecret)
+		createPullSecretTemplate(pullSecretPath)
 		//Update the Bash Script with the provided information from the user.
 		updateBashScript(private)
 		//Generate SSH key pair using ssh-keygen
