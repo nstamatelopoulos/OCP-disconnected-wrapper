@@ -15,10 +15,10 @@ const (
 	terraformConfigFile    = "./Disconnected.tf"
 	registryScriptTemplate = "./registry-mirror-script-terraform.sh.temp"
 	registryScript         = "./registry-mirror-script-terraform.sh"
-	pullSecret             = "./config/pull-secret.json" // Need to get this using a flag from the user
 	pullSecretTemplate     = "./pull-secret.template"
-	publicKey              = "./config/awsRegistrySSHKey.pub" // Uneeded constant. Need to get the public key from the user
-	privateKey             = "./config/awsRegistrySSHKey"     // Uneeded constant. No need to use a private key if i make the script run in the terraform "user-data"
+	publicKey              = "./awsRegistrySSHKey.pub" // Uneeded constant. Need to get the public key from the user
+	privateKey             = "./awsRegistrySSHKey"     // Uneeded constant. No need to use a private key if i make the script run in the terraform "user-data"
+
 )
 
 func main() {
@@ -27,17 +27,17 @@ func main() {
 	installFlag := flag.Bool("install", false, "Install Registry")
 	destroyFlag := flag.Bool("destroy", false, "Destroy Registry")
 	privateFlag := flag.Bool("private", false, "Publish registry with private or public hostname. Default value False")
-	pullSecretPath := flag.String("pull-secret", "", "Set the Path to the user pull-secret")
-	publicKeyPath := flag.String("public-key", "", "Set the path to the user public key")
+	pullSecretPath := flag.String("pull-secret", "", "Set the Path to the user provided pull-secret")
+	//publicKeyPath := flag.String("public-key", "", "Set the path to the user public key")
 
 	flag.Parse()
 
 	if *installFlag {
 		install := true
-		installOrDestroyRegistry(install, *privateFlag)
+		installRegistry(install, *privateFlag, *pullSecretPath)
 	} else if *destroyFlag {
 		install := false
-		installOrDestroyRegistry(install, *privateFlag)
+		destroyRegistry(install, *privateFlag)
 	}
 
 }
@@ -76,53 +76,50 @@ func runTerraform(mode string) error {
 	return nil
 }
 
-func installOrDestroyRegistry(installFlag bool, private bool) {
-	if installFlag {
-		cmd := exec.Command("terraform", "init")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+func installRegistry(installFlag bool, private bool, pullSecretPath string) {
 
-		cmd.Run()
-		// Delete left over templates
-		deleteGeneratedFiles()
-		//Create new PullSecretTemplate
-		createPullSecretTemplate(pullSecretPath)
-		//Update the Bash Script with the provided information from the user.
-		updateBashScript(private)
-		//Generate SSH key pair using ssh-keygen
-		GenerateSSHKey()
-		//Import the SSH public and private key to the terraform file to be used from instance creation and file provisioners.
-		importSSHKeyToTerraformfile()
-		// Update the region in the terraform file.
-		/*if region != "" {
-			err := updateTerraformConfig(region)
-			if err != nil {
-				log.Fatalf("Failed to update Terraform configuration: %v", err)
-			}
-		} else {
-			log.Fatal("Region not provided. Please specify the --region flag.")
-		}*/
-		mode := "apply"
-		// Run the terraform command
-		err := runTerraform(mode)
+	cmd := exec.Command("terraform", "init")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	cmd.Run()
+	// Delete left over templates
+	deleteGeneratedFiles()
+	//Create new PullSecretTemplate
+	createPullSecretTemplate(pullSecretPath)
+	//Update the Bash Script with the provided information from the user.
+	updateBashScript(private)
+	//Generate SSH key pair using ssh-keygen
+	GenerateSSHKey()
+	//Import the SSH public and private key to the terraform file to be used from instance creation and file provisioners.
+	importSSHKeyToTerraformfile()
+	// Update the region in the terraform file.
+	/*if region != "" {
+		err := updateTerraformConfig(region)
 		if err != nil {
-			log.Fatalf("Failed to execute terraform apply: %v", err)
+			log.Fatalf("Failed to update Terraform configuration: %v", err)
 		}
-
-		return
 	} else {
-		mode := "destroy"
-		// Run the terraform command
-		deleteGeneratedFiles()
-		err := runTerraform(mode)
-		if err != nil {
-			log.Fatalf("Failed to execute terraform destroy: %v", err)
-			return
-		}
-		os.Remove(terraformConfigFile)
-		return
-
+		log.Fatal("Region not provided. Please specify the --region flag.")
+	}*/
+	mode := "apply"
+	// Run the terraform command
+	err := runTerraform(mode)
+	if err != nil {
+		log.Fatalf("Failed to execute terraform apply: %v", err)
 	}
+}
+
+func destroyRegistry(installFlag bool, private bool) {
+	// Run the terraform destroy command
+	mode := "destroy"
+	deleteGeneratedFiles()
+	err := runTerraform(mode)
+	if err != nil {
+		log.Fatalf("Failed to execute terraform destroy: %v", err)
+		return
+	}
+	os.Remove(terraformConfigFile)
 }
 
 func updateBashScript(private bool) error {
@@ -214,9 +211,9 @@ func importSSHKeyToTerraformfile() {
 		return
 	}
 	// Replace the placeholder string with the generated public key path
-	addPublicKeyPath := strings.ReplaceAll(string(templateContent), "PUBLIC_KEY_PATH", publicKey)
+	addPublicKeyPath := strings.ReplaceAll(string(templateContent), "PUBLIC_KEY_PATH", "./awsRegistrySSHKey.pub")
 	// Replace the placeholder string with the generated private key path
-	addPrivateKeyPath := strings.ReplaceAll(addPublicKeyPath, "PRIVATE_KEY_PATH", privateKey)
+	addPrivateKeyPath := strings.ReplaceAll(addPublicKeyPath, "PRIVATE_KEY_PATH", "./awsRegistrySSHKey")
 	// Write the updated content to the Terraform configuration file
 	err = os.WriteFile(terraformConfigFile, []byte(addPrivateKeyPath), 0644)
 	if err != nil {
