@@ -19,7 +19,7 @@ tar -xf mirror-registry.tar.gz
 
 echo "Installing mirror-registry"
 
-sudo ./mirror-registry install --quayHostname=$(REGISTRY_URL) --quayRoot=/home/ec2-user/registry-stuff > registry-install.log
+sudo ./mirror-registry install --quayHostname=$($REGISTRY_URL$) --quayRoot=/home/ec2-user/registry-stuff > registry-install.log
 
 echo "Get the password for the registry"
 
@@ -36,12 +36,18 @@ registry_URL="${registry_URL%% *}"
 
 echo "Create the pull-secret with the credentials and store it under ./docker/config.json"
 
-mkdir ~/.docker
+homedir=/home/ec2-user/
 
-cp ~/pull-secret.template ~/.docker/config.json
+mkdir $homedir/.docker
 
-sed -i "s/CREDENTIALS/$password_hash/g" ~/.docker/config.json
-sed -i "s/REGISTRY-HOSTNAME/$registry_URL/g" ~/.docker/config.json
+cat <<EOF > "$homedir/pull-secret.template"
+$PULL_SECRET_CONTENT$
+EOF
+
+cp /home/ec2-user/pull-secret.template $homedir/.docker/config.json
+
+sed -i "s/CREDENTIALS/$password_hash/g" $homedir/.docker/config.json
+sed -i "s/REGISTRY-HOSTNAME/$registry_URL/g" $homedir/.docker/config.json
 
 echo "Downloading oc-mirror"
 
@@ -60,3 +66,4 @@ sudo update-ca-trust
 echo "The registry is ready to mirror"
 
 echo "SSH command to registry host ssh -i ./config/awsRegistrySSHKey ec2-user@$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)"
+

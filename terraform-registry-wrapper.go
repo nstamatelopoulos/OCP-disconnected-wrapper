@@ -16,9 +16,6 @@ const (
 	registryScriptTemplate = "./registry-mirror-script-terraform.sh.temp"
 	registryScript         = "./registry-mirror-script-terraform.sh"
 	pullSecretTemplate     = "./pull-secret.template"
-	publicKey              = "./awsRegistrySSHKey.pub" // Uneeded constant. Need to get the public key from the user
-	privateKey             = "./awsRegistrySSHKey"     // Uneeded constant. No need to use a private key if i make the script run in the terraform "user-data"
-
 )
 
 func main() {
@@ -28,13 +25,13 @@ func main() {
 	destroyFlag := flag.Bool("destroy", false, "Destroy Registry")
 	privateFlag := flag.Bool("private", false, "Publish registry with private or public hostname. Default value False")
 	pullSecretPath := flag.String("pull-secret", "", "Set the Path to the user provided pull-secret")
-	//publicKeyPath := flag.String("public-key", "", "Set the path to the user public key")
+	publicKeyPath := flag.String("public-key", "", "Set the path to the user public key")
 
 	flag.Parse()
 
 	if *installFlag {
 		install := true
-		installRegistry(install, *privateFlag, *pullSecretPath)
+		installRegistry(install, *privateFlag, *pullSecretPath, *publicKeyPath)
 	} else if *destroyFlag {
 		install := false
 		destroyRegistry(install, *privateFlag)
@@ -76,7 +73,7 @@ func runTerraform(mode string) error {
 	return nil
 }
 
-func installRegistry(installFlag bool, private bool, pullSecretPath string) {
+func installRegistry(installFlag bool, private bool, pullSecretPath string, publicKeyPath string) {
 
 	cmd := exec.Command("terraform", "init")
 	cmd.Stdout = os.Stdout
@@ -89,10 +86,8 @@ func installRegistry(installFlag bool, private bool, pullSecretPath string) {
 	createPullSecretTemplate(pullSecretPath)
 	//Update the Bash Script with the provided information from the user.
 	updateBashScript(private)
-	//Generate SSH key pair using ssh-keygen
-	GenerateSSHKey()
 	//Import the SSH public and private key to the terraform file to be used from instance creation and file provisioners.
-	importSSHKeyToTerraformfile()
+	importSSHKeyToTerraformfile(publicKeyPath)
 	// Update the region in the terraform file.
 	/*if region != "" {
 		err := updateTerraformConfig(region)
@@ -113,47 +108,53 @@ func installRegistry(installFlag bool, private bool, pullSecretPath string) {
 func destroyRegistry(installFlag bool, private bool) {
 	// Run the terraform destroy command
 	mode := "destroy"
-	deleteGeneratedFiles()
 	err := runTerraform(mode)
 	if err != nil {
 		log.Fatalf("Failed to execute terraform destroy: %v", err)
 		return
 	}
 	os.Remove(terraformConfigFile)
+	deleteGeneratedFiles()
 }
 
-func updateBashScript(private bool) error {
-	// Read the contents of the registry script file
+// The updateBashScript function is changes the variables of the bash script template and writes it in a new file.
+func updateBashScript(private bool) {
+	var urlString string
+	if private {
+		urlString = "hostname"
+	} else {
+		urlString = "curl -s http://169.254.169.254/latest/meta-data/public-hostname"
+	}
+	pullSecretContent, err := os.ReadFile(pullSecretTemplate)
+	if err != nil {
+		println("Cannot read the pull-secret")
+	}
+	pullSecretTemplateAsString := string(pullSecretContent)
+	//Map of the replacement strings in the script file
+	replacements := map[string]string{
+		"$PULL_SECRET_CONTENT$": pullSecretTemplateAsString,
+		"$REGISTRY_URL$":        urlString,
+	}
 	scriptContent, err := os.ReadFile(registryScriptTemplate)
 	if err != nil {
-		return err
+		println("Cannot read the registry script template file")
 	}
-	if private {
-		// Replace the placeholder string with the private hostname of the registry (for disconnected cluster deployments)
-		changeHostnameSourceToFile := strings.ReplaceAll(string(scriptContent), "REGISTRY_URL", "hostname")
-		err = os.WriteFile(registryScript, []byte(changeHostnameSourceToFile), 0644)
-		//fmt.Println("changed the script to private")
-		if err != nil {
-			return err
-		}
-	} else {
-		// Replace the placeholder string with the public hostname of the registry
-		changeHostnameSourceToFile := strings.ReplaceAll(string(scriptContent), "REGISTRY_URL", "curl -s http://169.254.169.254/latest/meta-data/public-hostname")
-		err = os.WriteFile(registryScript, []byte(changeHostnameSourceToFile), 0644)
-		//fmt.Println("changed the script to public")
-		if err != nil {
-			return err
-		}
+	scriptContentAsString := string(scriptContent)
+	for oldString, newString := range replacements {
+		scriptContentAsString = strings.ReplaceAll(scriptContentAsString, oldString, newString)
 	}
-	return nil
+	error := os.WriteFile(registryScript, []byte(scriptContentAsString), 0644)
+	if error != nil {
+		println("Cannot write the changes to the registry script file")
+	}
 }
 
 // To clean up the bash script generated file after successfull deployment of the registry.
 func deleteGeneratedFiles() {
-	ScriptTemp := os.Remove(registryScript)
+	Script := os.Remove(registryScript)
 	PullSecretTemp := os.Remove(pullSecretTemplate)
 
-	if ScriptTemp != nil || PullSecretTemp != nil {
+	if Script != nil || PullSecretTemp != nil {
 		// If an error occurs, print the error message
 		//fmt.Println("one file is not deleted")
 		return
@@ -188,22 +189,7 @@ func createPullSecretTemplate(pullSecret string) {
 	}
 }
 
-func GenerateSSHKey() {
-	_, err := os.Stat(privateKey)
-	if err != nil {
-		cmd := exec.Command("ssh-keygen", "-t", "rsa", "-b", "2048", "-f", privateKey, "-q", "-N", "")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		err := cmd.Run()
-		if err != nil {
-			fmt.Println("SSH key failed to be generated because probably exists")
-			return
-		}
-	}
-}
-
-func importSSHKeyToTerraformfile() {
+func importSSHKeyToTerraformfile(publicKey string) {
 	// Read the contents of the Terraform template file
 	templateContent, err := os.ReadFile(terraformTemplateFile)
 	if err != nil {
@@ -211,11 +197,8 @@ func importSSHKeyToTerraformfile() {
 		return
 	}
 	// Replace the placeholder string with the generated public key path
-	addPublicKeyPath := strings.ReplaceAll(string(templateContent), "PUBLIC_KEY_PATH", "./awsRegistrySSHKey.pub")
-	// Replace the placeholder string with the generated private key path
-	addPrivateKeyPath := strings.ReplaceAll(addPublicKeyPath, "PRIVATE_KEY_PATH", "./awsRegistrySSHKey")
-	// Write the updated content to the Terraform configuration file
-	err = os.WriteFile(terraformConfigFile, []byte(addPrivateKeyPath), 0644)
+	addPublicKeyPath := strings.ReplaceAll(string(templateContent), "PUBLIC_KEY_PATH", publicKey)
+	err = os.WriteFile(terraformConfigFile, []byte(addPublicKeyPath), 0644)
 	if err != nil {
 		fmt.Println("Cannot write the Terraform config file")
 		return
