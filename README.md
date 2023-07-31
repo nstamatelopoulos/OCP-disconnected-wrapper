@@ -21,35 +21,34 @@ aws_secret_access_key = <key-value>
 ~~~
 
 - Pull-Secret
-The pull-secret needs to be added inside the config directory (create the directory until i commit it) and to have the name pull-secret.json in a beautified format (might work and oneliner too haven't tried yet).
-You can download your pull-secret from console.redhat.com and to beutify it using "jq" command. The below command should be sufficient:
-~~~
-$ cat pull-secret.txt | jq > pull-secret.json
-~~~
+The pull-secret path need to be provided with the --pull-secret flag upon running the installation of the registry. 
+You can download your pull-secret from console.redhat.com
+
 - Golang install
 Please see how to download and setup Golang to your machine in [Golang Documentation](https://go.dev/doc/install)
 
 # How to use
 
-1) Clone the repository and add in the config directory the pull-secret.json file as mentioned above.
-2) Run the binary directly *./terraform-registry-wrapper --install* or use go to build "go build terraform-registry-wrapper.go" to create a binary executable or "go run terraform-registry-wrapper.go" to run the program directly.
-Options:
-- **terraform-registry-wrapper** --install # Install a mirror registry with a public URL so it can be used from connected clusters.
-- **terraform-registry-wrapper** --install --private # Install a mirror registry with a private URL. To be used in case one wants mirror-registry URL to be private.
+1) Clone the repository.
+2) Run the binary directly *./terraform-registry-wrapper* or use golang to build "go build terraform-registry-wrapper.go" to create a binary executable or "go run terraform-registry-wrapper.go" to run the program directly.
+   
+Required flags for launching an installation:
+- **--install** # Instructs the tool to that we are launching an installation.
+- **--pull-secret** # Here we need to set the path to the pull-secret
+- **--public-key** # With this flag we provide the path to the public-key we need to inject in the mirror-registry.
+
+Optional flags for launching an installation:
+- **--private** # This boolean is false by default. If set to true then the mirror-registry will be created with a private URL (Its VPC DNS hostname) instead of public (by default)
+                # The private flag is not useful except in case one wants to bootstrap a cluster in the same VPC. I am planning to use this flag in future features.
+Examples:
+
+- **terraform-registry-wrapper** --install --pull-secret=/my/pull-secret/absolute/path --public-key=/my/public-key/absolute/path # Install a mirror registry with a public URL so it can be used from connected clusters.
+- **terraform-registry-wrapper** --install --private --pull-secret=/my/pull-secret/absolute/path --public-key=/my/public-key/absolute/path # Install a mirror registry with a private URL. To be used in case one wants mirror-registry URL to be private for whatever reason.
 - **terraform-registry-wrapper** --destroy # Destroy the mirror registry.
 
-**Note:** Do not create any other resources on the created VPC manually post deployment as all components are managed by terraform and it can cause issue when destroying. If manually resources were created
-it will be required to be manually deleted and run destroy again.
+**Note:** If one creates any other resources on the created VPC manually post the deployment these need to be deleted prior running the --destroy command, terraform knows only the components that are created during the installation of the mirror-registry. Not managed objects of terraform are can cause issue when destroying the VPC.
 
 # Additional information
 The tool creates the mirror registry using the [mirror-registry](https://docs.openshift.com/container-platform/4.12/installing/disconnected_install/installing-mirroring-creating-registry.html) script.
 Although it makes it much easier as it automatically makes some other actions like the below:
-- Creates an EC2 instance to host the registry on AWS. (VPC,Security,Groups,SSH key etc..)
-- After creating the registry it automatically builds the pull-secret with the regitry credentials and store it under ~/.docker/config.json (Default location for oc-mirror tool to use it)
-- Configures the SSL trust between the host and the registry container by adding the CA of the self-signed cert in the system CA store.
-- Downloads and setup the oc-mirror tool to be used for mirroring.
-- Creates SSH key and provides the SSH private key under /config/ directory to be used for logging in to the registry EC2. (After successfull creation the ssh command is getting printed for ease of use)
-Example:
-~~~
-aws_instance.mirror-registry (remote-exec): SSH command to registry host ssh -i ./config/awsRegistrySSHKey ec2-user@ec2-XX-XX-XXX-XX.eu-west-1.compute.amazonaws.com
-~~~
+- Creates an EC2 instance to host the registry on AWS. (VPC,Security,Groups, Gateway, Routing etc..)
