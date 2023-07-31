@@ -49,13 +49,17 @@ cp /home/ec2-user/pull-secret.template $homedir/.docker/config.json
 sed -i "s/CREDENTIALS/$password_hash/g" $homedir/.docker/config.json
 sed -i "s/REGISTRY-HOSTNAME/$registry_URL/g" $homedir/.docker/config.json
 
+echo "Create oc-mirror workspace directory"
+
+mkdir $homedir/mirroring-workspace
+
 echo "Downloading oc-mirror"
 
-wget -q https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/oc-mirror.tar.gz
+wget -q https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/oc-mirror.tar.gz -P $homedir/mirroring-workspace/
 
-tar -xf oc-mirror.tar.gz
+tar -xf $homedir/mirroring-workspace/oc-mirror.tar.gz -C $homedir/mirroring-workspace/
 
-chmod +x oc-mirror
+chmod +x $homedir/mirroring-workspace/oc-mirror
 
 echo "Adding the rootCA to the host so registry to be trusted"
 
@@ -63,7 +67,35 @@ sudo cp /home/ec2-user/registry-stuff/quay-rootCA/rootCA.pem /etc/pki/ca-trust/s
 
 sudo update-ca-trust
 
-echo "The registry is ready to mirror"
+echo "Create the imageset-config.yaml template file"
 
-echo "SSH command to registry host ssh -i ./config/awsRegistrySSHKey ec2-user@$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)"
+cat <<EOF > "$homedir/mirroring-workspace/imageset-config.yaml"
+apiVersion: mirror.openshift.io/v1alpha1
+kind: ImageSetConfiguration
+storageConfig:
+  local:
+    path: /home/ec2-user/oc-mirror-metadata
+mirror:
+  ocp:
+    channels:
+      - name: stable-4.10
+  operators:
+    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10
+      headsOnly: false
+      packages:
+        - name: rhacs-operator
+          channels:
+          - name: latest
+          startingVersion: 3.67.0
+EOF
+
+echo "Cleanup the mirroring-workspace"
+
+rm $homedir/mirroring-workspace/oc-mirror.tar.gz
+
+echo "Registry is ready to mirror"
+
+cat <<EOF > "$homedir/READY"
+The registry was initialized successfully!
+EOF
 
