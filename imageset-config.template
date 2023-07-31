@@ -1,8 +1,8 @@
 apiVersion: mirror.openshift.io/v1alpha1
 kind: ImageSetConfiguration
 storageConfig:
- registry:
-   imageURL: example.com/example/oc-mirror
+  local:
+    path: /home/ec2-user/oc-mirror-metadata
 mirror:
   ocp:
     channels:
