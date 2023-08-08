@@ -18,9 +18,31 @@ const (
 	pullSecretTemplate     = "./pull-secret.template"
 )
 
+var regions = map[string]string{
+	"eu-west-1":      "ami-0f0f1c02e5e4d9d9f",
+	"eu-west-2":      "ami-035c5dc086849b5de",
+	"eu-west-3":      "ami-0460bf124812bebfa",
+	"eu-central-1":   "ami-0e7e134863fac4946",
+	"eu-south-2":     "ami-031b6ef6108761a77",
+	"eu-north-1":     "ami-06a2a41d455060f8b",
+	"us-east-1":      "ami-06640050dc3f556bb",
+	"us-east-2":      "ami-092b43193629811af",
+	"us-west-1":      "ami-0186e3fec9b0283ee",
+	"us-west-2":      "ami-08970fb2e5767e3b8",
+	"ap-south-1":     "ami-05c8ca4485f8b138a",
+	"ap-northeast-3": "ami-044921b7897a7e0da",
+	"ap-northeast-2": "ami-06c568b08b5a431d5",
+	"ap-southeast-1": "ami-051f0947e420652a9",
+	"ap-southeast-2": "ami-0808460885ff81045",
+	"ap-northeast-1": "ami-0f903fb156f24adbf",
+	"ca-central":     "ami-0c3d3a230b9668c02",
+	"sa-east-1":      "ami-0c1b8b886626f940c",
+}
+
 func main() {
+
 	// Parse command-line arguments
-	//region := flag.String("region", "", "Set the AWS region")   // To be enabled in the future. Pending to create an mapping between AMI IDs and regions of the mirror registy instance image
+	region := flag.String("region", "", "Set the AWS region")
 	installFlag := flag.Bool("install", false, "Install Registry")
 	destroyFlag := flag.Bool("destroy", false, "Destroy Registry")
 	privateFlag := flag.Bool("private", false, "Publish registry with private or public hostname. Default value False")
@@ -30,34 +52,19 @@ func main() {
 	flag.Parse()
 
 	if *installFlag {
-		install := true
-		installRegistry(install, *privateFlag, *pullSecretPath, *publicKeyPath)
+		amiID, found := regions[*region]
+		if !found {
+			fmt.Println("Invalid or unsupported region:", *region)
+			return
+		}
+
+		availabilityZone := *region + "a"
+		installRegistry(*privateFlag, *pullSecretPath, *publicKeyPath, *region, amiID, availabilityZone)
 	} else if *destroyFlag {
-		install := false
-		destroyRegistry(install, *privateFlag)
+		destroyRegistry()
 	}
 
 }
-
-/*func updateTerraformConfig(region string) error {
-	// Read the contents of the Terraform template file
-	templateContent, err := os.ReadFile(terraformTemplateFile)
-	if err != nil {
-		return err
-	}
-	// Replace the placeholder string with the user-provided region
-	changeRegionToFile := strings.ReplaceAll(string(templateContent), "Region-Value", region)
-	// Replace the Availability Zone according to the region provided
-	var availabilityZone string = region + "a"
-	changeAvailZoneToFile := strings.ReplaceAll(changeRegionToFile, "Availability-Zone", availabilityZone)
-	// Write the updated content to the Terraform configuration file
-	err = os.WriteFile(terraformConfigFile, []byte(changeAvailZoneToFile), 0644)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}*/
 
 // This function executes the terraform command, Can be either apply or destroy.
 func runTerraform(mode string) error {
@@ -73,7 +80,7 @@ func runTerraform(mode string) error {
 	return nil
 }
 
-func installRegistry(installFlag bool, private bool, pullSecretPath string, publicKeyPath string) {
+func installRegistry(privateFlag bool, pullSecretPath string, publicKeyPath string, region string, region_ami string, availabilityZone string) {
 
 	cmd := exec.Command("terraform", "init")
 	cmd.Stdout = os.Stdout
@@ -85,18 +92,9 @@ func installRegistry(installFlag bool, private bool, pullSecretPath string, publ
 	//Create new PullSecretTemplate
 	createPullSecretTemplate(pullSecretPath)
 	//Update the Bash Script with the provided information from the user.
-	updateBashScript(private)
+	updateBashScript(privateFlag)
 	//Import the SSH public and private key to the terraform file to be used from instance creation and file provisioners.
-	importSSHKeyToTerraformfile(publicKeyPath)
-	// Update the region in the terraform file.
-	/*if region != "" {
-		err := updateTerraformConfig(region)
-		if err != nil {
-			log.Fatalf("Failed to update Terraform configuration: %v", err)
-		}
-	} else {
-		log.Fatal("Region not provided. Please specify the --region flag.")
-	}*/
+	UpdateTerraformtemplateAndCreateTerraformConfigFile(publicKeyPath, region, region_ami, availabilityZone)
 	mode := "apply"
 	// Run the terraform command
 	err := runTerraform(mode)
@@ -105,7 +103,7 @@ func installRegistry(installFlag bool, private bool, pullSecretPath string, publ
 	}
 }
 
-func destroyRegistry(installFlag bool, private bool) {
+func destroyRegistry() {
 	// Run the terraform destroy command
 	mode := "destroy"
 	err := runTerraform(mode)
@@ -189,7 +187,7 @@ func createPullSecretTemplate(pullSecret string) {
 	}
 }
 
-func importSSHKeyToTerraformfile(publicKey string) {
+func UpdateTerraformtemplateAndCreateTerraformConfigFile(publicKey string, region string, amiID string, availZone string) {
 	// Read the contents of the Terraform template file
 	templateContent, err := os.ReadFile(terraformTemplateFile)
 	if err != nil {
@@ -197,8 +195,11 @@ func importSSHKeyToTerraformfile(publicKey string) {
 		return
 	}
 	// Replace the placeholder string with the generated public key path
-	addPublicKeyPath := strings.ReplaceAll(string(templateContent), "PUBLIC_KEY_PATH", publicKey)
-	err = os.WriteFile(terraformConfigFile, []byte(addPublicKeyPath), 0644)
+	replacedPublicKey := strings.ReplaceAll(string(templateContent), "PUBLIC_KEY_PATH", publicKey)
+	replacedRegion := strings.ReplaceAll(string(replacedPublicKey), "AWS_REGION", region)
+	replacedAvailabilityZone := strings.ReplaceAll(string(replacedRegion), "AVAILABILITY_ZONE", availZone)
+	updatedFile := strings.ReplaceAll(string(replacedAvailabilityZone), "AMI_ID", amiID)
+	err = os.WriteFile(terraformConfigFile, []byte(updatedFile), 0644)
 	if err != nil {
 		fmt.Println("Cannot write the Terraform config file")
 		return
