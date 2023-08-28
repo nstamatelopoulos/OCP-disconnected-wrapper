@@ -70,7 +70,7 @@ sudo update-ca-trust
 echo "Create the imageset-config.yaml template file"
 
 cat <<EOF > "$homedir/mirroring-workspace/imageset-config.yaml"
-apiVersion: mirror.openshift.io/v1alpha1
+apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 storageConfig:
   local:
@@ -88,6 +88,8 @@ mirror:
           - name: latest
           startingVersion: 3.67.0
 EOF
+
+chown -R ec2-user:ec2-user $homedir/mirroring-workspace/
 
 echo "Cleanup the mirroring-workspace"
 
