@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	terraformTemplateFile  = "./Disconnected-template.tf.temp"
-	terraformConfigFile    = "./Disconnected.tf"
+	cluster_TF             = "./Build_Cluster_Dependencies.tf"
+	registry_TF            = "./Build_Registry.tf"
 	registryScriptTemplate = "./registry-mirror-script-terraform.sh.temp"
 	registryScript         = "./registry-mirror-script-terraform.sh"
 	pullSecretTemplate     = "./pull-secret.template"
@@ -45,7 +45,7 @@ func main() {
 	region := flag.String("region", "", "Set the AWS region")
 	installFlag := flag.Bool("install", false, "Install Registry")
 	destroyFlag := flag.Bool("destroy", false, "Destroy Registry")
-	privateFlag := flag.Bool("private", false, "Publish registry with private or public hostname. Default value False")
+	clusterFlag := flag.Bool("cluster", false, "Create a disconnected cluster. Default value False")
 	pullSecretPath := flag.String("pull-secret", "", "Set the Path to the user provided pull-secret")
 	publicKeyPath := flag.String("public-key", "", "Set the path to the user public key")
 
@@ -58,8 +58,7 @@ func main() {
 			return
 		}
 
-		availabilityZone := *region + "a"
-		installRegistry(*privateFlag, *pullSecretPath, *publicKeyPath, *region, amiID, availabilityZone)
+		installRegistry(*clusterFlag, *pullSecretPath, *publicKeyPath, *region, amiID)
 	} else if *destroyFlag {
 		destroyRegistry()
 	}
@@ -80,7 +79,7 @@ func runTerraform(mode string) error {
 	return nil
 }
 
-func installRegistry(privateFlag bool, pullSecretPath string, publicKeyPath string, region string, region_ami string, availabilityZone string) {
+func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath string, region string, region_ami string) {
 
 	cmd := exec.Command("terraform", "init")
 	cmd.Stdout = os.Stdout
@@ -92,9 +91,14 @@ func installRegistry(privateFlag bool, pullSecretPath string, publicKeyPath stri
 	//Create new PullSecretTemplate
 	createPullSecretTemplate(pullSecretPath)
 	//Update the Bash Script with the provided information from the user.
-	updateBashScript(privateFlag)
-	//Import the SSH public and private key to the terraform file to be used from instance creation and file provisioners.
-	UpdateTerraformtemplateAndCreateTerraformConfigFile(publicKeyPath, region, region_ami, availabilityZone)
+	updateBashScript(clusterFlag)
+	//Replace the appropriate values in registry template terraform file
+	UpdateCreateTfFileRegistry(publicKeyPath, region, region_ami)
+	//If cluster flag is used replace the appropriate values in cluster dependencies terraform file
+	if clusterFlag {
+		UpdateCreateTfFileCluster(region)
+		//CombineTemporaryFiles()
+	}
 	mode := "apply"
 	// Run the terraform command
 	err := runTerraform(mode)
@@ -111,7 +115,8 @@ func destroyRegistry() {
 		log.Fatalf("Failed to execute terraform destroy: %v", err)
 		return
 	}
-	os.Remove(terraformConfigFile)
+	os.Remove(cluster_TF)
+	os.Remove(registry_TF)
 	deleteGeneratedFiles()
 }
 
@@ -187,21 +192,74 @@ func createPullSecretTemplate(pullSecret string) {
 	}
 }
 
-func UpdateTerraformtemplateAndCreateTerraformConfigFile(publicKey string, region string, amiID string, availZone string) {
+func UpdateCreateTfFileRegistry(publicKey string, region string, amiID string) {
+
 	// Read the contents of the Terraform template file
-	templateContent, err := os.ReadFile(terraformTemplateFile)
+	fmt.Println("Updating and creating the Registry terraform file")
+	templateContent, err := os.ReadFile("Disconnected-template.tf.temp")
 	if err != nil {
 		fmt.Println("Cannot read template file")
 		return
 	}
+
 	// Replace the placeholder string with the generated public key path
 	replacedPublicKey := strings.ReplaceAll(string(templateContent), "PUBLIC_KEY_PATH", publicKey)
 	replacedRegion := strings.ReplaceAll(string(replacedPublicKey), "AWS_REGION", region)
-	replacedAvailabilityZone := strings.ReplaceAll(string(replacedRegion), "AVAILABILITY_ZONE", availZone)
+	replacedAvailabilityZone := strings.ReplaceAll(string(replacedRegion), "AVAILABILITY_ZONE", (region + "a"))
 	updatedFile := strings.ReplaceAll(string(replacedAvailabilityZone), "AMI_ID", amiID)
-	err = os.WriteFile(terraformConfigFile, []byte(updatedFile), 0644)
+	err = os.WriteFile("Build_Registry.tf", []byte(updatedFile), 0644)
 	if err != nil {
 		fmt.Println("Cannot write the Terraform config file")
 		return
 	}
 }
+
+func UpdateCreateTfFileCluster(region string) {
+	// Read the contents of the Terraform template file
+	fmt.Println("Updating and creating the Cluster dependencies file")
+	templateContent, err := os.ReadFile("cluster-dependencies.tf.temp")
+	if err != nil {
+		fmt.Println("Cannot read template file")
+		return
+	}
+
+	availZoneA := (region + "a")
+	availZoneB := (region + "b")
+	availZoneC := (region + "c")
+
+	// Replace the placeholder string with the generated public key path
+	replacedRegion := strings.ReplaceAll(string(templateContent), "AWS_REGION", region)
+	replacedAvailabilityZoneA := strings.ReplaceAll(string(replacedRegion), "AVAILABILITY_ZONE_A", availZoneA)
+	replacedAvailabilityZoneB := strings.ReplaceAll(string(replacedAvailabilityZoneA), "AVAILABILITY_ZONE_B", availZoneB)
+	updatedFile := strings.ReplaceAll(string(replacedAvailabilityZoneB), "AVAILABILITY_ZONE_C", availZoneC)
+	err = os.WriteFile("Build_Cluster_Dependencies.tf", []byte(updatedFile), 0644)
+	if err != nil {
+		fmt.Println("Cannot write the Terraform config file")
+		return
+	}
+}
+
+/*
+func CombineTemporaryFiles() error {
+	// Read the contents of the registry temporary files
+	registryContent, err := os.ReadFile("./Cluster-dependencies.tf.temp")
+	if err != nil {
+		return fmt.Errorf("Cannot read temporary registry file: %v", err)
+	}
+	// Read the contents of the cluster temporary files
+	clusterContent, err := os.ReadFile("./Disconnected-registry.tf.temp")
+	if err != nil {
+		return fmt.Errorf("Cannot read temporary cluster file: %v", err)
+	}
+
+	// Combine the contents of the temporary files
+	combinedContent := append(registryContent, clusterContent...)
+
+	// Write the combined content to the output file
+	err = os.WriteFile("./Consolidated.tf", combinedContent, 0644)
+	if err != nil {
+		return fmt.Errorf("Cannot write the combined Terraform config file: %v", err)
+	}
+
+	return nil
+}*/

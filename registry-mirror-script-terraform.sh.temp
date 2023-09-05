@@ -76,7 +76,7 @@ storageConfig:
   local:
     path: /home/ec2-user/oc-mirror-metadata
 mirror:
-  ocp:
+  platform:
     channels:
       - name: stable-4.10
   operators:

@@ -24,9 +24,13 @@ resource "aws_subnet" "registry-subnet" {
   }
 }
 
-data "aws_route_table" "route-table" {
- # subnet_id = "subnet-000eda3c528a3ec5f"
- vpc_id = aws_vpc.disconnected-vpc.id
+data "aws_route_table" "main-route-table" {
+  vpc_id = aws_vpc.disconnected-vpc.id
+
+  filter {
+    name   = "association.main"
+    values = ["true"]
+  }
 }
 
 resource "aws_internet_gateway" "registry-gw" {
@@ -37,7 +41,8 @@ resource "aws_internet_gateway" "registry-gw" {
 }
 
 resource "aws_route" "registry-igw-route" {
-  route_table_id            = data.aws_route_table.route-table.id
+
+  route_table_id            = data.aws_route_table.main-route-table.id
   destination_cidr_block    = "0.0.0.0/0"
   gateway_id                = aws_internet_gateway.registry-gw.id
 }

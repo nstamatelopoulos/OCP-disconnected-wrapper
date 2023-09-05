@@ -1,0 +1,113 @@
+
+resource "aws_subnet" "private-1" {
+  vpc_id     = aws_vpc.disconnected-vpc.id
+  cidr_block = "10.0.0.32/27"
+  availability_zone = "AVAILABILITY_ZONE_A"
+  
+  tags = {
+    Name = "Private-1"
+  }
+}
+
+resource "aws_subnet" "private-2" {
+  vpc_id     = aws_vpc.disconnected-vpc.id
+  cidr_block = "10.0.0.64/27"
+  availability_zone = "AVAILABILITY_ZONE_B"
+
+  tags = {
+    Name = "Private-2"
+  }
+}
+
+resource "aws_subnet" "private-3" {
+  vpc_id     = aws_vpc.disconnected-vpc.id
+  cidr_block = "10.0.0.96/27"
+  availability_zone = "AVAILABILITY_ZONE_C"
+
+  tags = {
+    Name = "Private-3"
+  }
+}
+
+resource "aws_route_table" "s3-route-table" {
+  vpc_id     = aws_vpc.disconnected-vpc.id
+
+  tags = {
+    Name = "s3-route-table"
+  }
+}
+
+resource "aws_route_table_association" "Private-1" {
+  subnet_id      = aws_subnet.private-1.id
+  route_table_id = aws_route_table.s3-route-table.id
+}
+
+resource "aws_route_table_association" "Private-2" {
+  subnet_id      = aws_subnet.private-2.id
+  route_table_id = aws_route_table.s3-route-table.id
+}
+
+resource "aws_route_table_association" "Private-3" {
+  subnet_id      = aws_subnet.private-3.id
+  route_table_id = aws_route_table.s3-route-table.id
+}
+
+resource "aws_security_group" "gateway-interfaces-sg" {
+  name        = "allow_all"
+  description = "Allow all inbound and outbound traffic"
+  vpc_id      = aws_vpc.disconnected-vpc.id
+
+  ingress {
+    description      = "Allow from everywhere"
+    from_port        = 0
+    to_port          = 65535
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port        = 0
+    to_port          = 65535
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "allow_all"
+  }
+}
+
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id = aws_vpc.disconnected-vpc.id
+  vpc_endpoint_type = "Gateway"
+  service_name = "com.amazonaws.AWS_REGION.s3"
+  route_table_ids = [aws_route_table.s3-route-table.id]
+
+  tags = {
+    Name = "s3.AWS_REGION.amazonaws.com"
+  }
+}
+
+resource "aws_vpc_endpoint" "ec2" {
+  vpc_id       = aws_vpc.disconnected-vpc.id
+  service_name = "com.amazonaws.AWS_REGION.ec2"
+  vpc_endpoint_type = "Interface"
+  security_group_ids = [aws_security_group.gateway-interfaces-sg.id]
+  subnet_ids = [aws_subnet.private-1.id, aws_subnet.private-2.id, aws_subnet.private-3.id]
+
+  tags = {
+    Name = "ec2.AWS_REGION.amazonaws.com"
+  }
+}
+
+resource "aws_vpc_endpoint" "elb" {
+  vpc_id       = aws_vpc.disconnected-vpc.id
+  service_name = "com.amazonaws.AWS_REGION.elasticloadbalancing"
+  vpc_endpoint_type = "Interface"
+  security_group_ids = [aws_security_group.gateway-interfaces-sg.id]
+  subnet_ids = [aws_subnet.private-1.id, aws_subnet.private-2.id, aws_subnet.private-3.id]
+
+  tags = {
+    Name = "elasticloadbalancing.AWS_REGION.amazonaws.com"
+  }
+}
