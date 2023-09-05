@@ -49,9 +49,10 @@ cp /home/ec2-user/pull-secret.template $homedir/.docker/config.json
 sed -i "s/CREDENTIALS/$password_hash/g" $homedir/.docker/config.json
 sed -i "s/REGISTRY-HOSTNAME/$registry_URL/g" $homedir/.docker/config.json
 
-echo "Create oc-mirror workspace directory"
+echo "Create oc-mirror and cluster workspace directory"
 
 mkdir $homedir/mirroring-workspace
+mkdir $homedir/cluster
 
 echo "Downloading oc-mirror"
 
@@ -67,7 +68,7 @@ sudo cp /home/ec2-user/registry-stuff/quay-rootCA/rootCA.pem /etc/pki/ca-trust/s
 
 sudo update-ca-trust
 
-echo "Create the imageset-config.yaml template file"
+echo "Create the imageset-config.yaml and install-config.yaml template file"
 
 cat <<EOF > "$homedir/mirroring-workspace/imageset-config.yaml"
 apiVersion: mirror.openshift.io/v1alpha2
@@ -89,7 +90,59 @@ mirror:
           startingVersion: 3.67.0
 EOF
 
+cat <<EOF > "$homedir/cluster/install-config.yaml"
+apiVersion: v1
+baseDomain: emea.aws.cee.support
+compute:
+- architecture: amd64
+  hyperthreading: Enabled
+  name: worker
+  platform: {}
+  replicas: 3
+controlPlane:
+  architecture: amd64
+  hyperthreading: Enabled
+  name: master
+  platform: {}
+  replicas: 3
+metadata:
+  creationTimestamp: null
+  name: nstamate-disconnected
+networking:
+  clusterNetwork:
+  - cidr: 10.128.0.0/14
+    hostPrefix: 23
+  machineNetwork:
+  - cidr: 10.0.0.32/27
+  - cidr: 10.0.0.64/27
+  - cidr: 10.0.0.96/27
+  networkType: OVNKubernetes
+  serviceNetwork:
+  - 172.30.0.0/16
+platform:
+  aws:
+    region: eu-west-1
+    subnets:
+    - ${private_subnet_1}
+    - ${private_subnet_2}
+    - ${private_subnet_3}
+publish: Internal
+pullSecret: 
+sshKey: |
+
+imageContentSources:
+  - mirrors:
+    - ip-10-0-0-7.eu-west-1.compute.internal:8443/openshift/release
+    source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+  - mirrors:
+    - ip-10-0-0-7.eu-west-1.compute.internal:8443/openshift/release-images
+    source: quay.io/openshift-release-dev/ocp-release
+additionalTrustBundle: |
+
+echo "Fixing directory permissions"
+
 chown -R ec2-user:ec2-user $homedir/mirroring-workspace/
+chown -R ec2-user:ec2-user $homedir/cluster
 
 echo "Cleanup the mirroring-workspace"
 

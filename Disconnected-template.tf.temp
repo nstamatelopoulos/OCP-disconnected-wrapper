@@ -98,7 +98,11 @@ resource "aws_instance" "mirror-registry" {
   subnet_id     = aws_subnet.registry-subnet.id
   vpc_security_group_ids = [aws_security_group.registry-sg.id]
 
-  user_data = file("registry-mirror-script-terraform.sh")
+  user_data = templatefile("registry-mirror-script-terraform.tpl", {
+        private_subnet_1 = aws_subnet.private-1.id
+        private_subnet_2 = aws_subnet.private-2.id
+        private_subnet_3 = aws_subnet.private-3.id
+  })
 
   root_block_device {
     volume_size = 700
