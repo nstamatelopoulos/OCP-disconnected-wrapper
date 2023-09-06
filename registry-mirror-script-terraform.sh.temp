@@ -2,7 +2,9 @@
 
 echo "Creating root directory"
 
-mkdir /home/ec2-user/registry-stuff && cd /home/ec2-user/registry-stuff
+homedir=/home/ec2-user
+
+mkdir $homedir/registry-stuff && cd $homedir/registry-stuff
 
 echo "Installing podman and wget"
 
@@ -19,24 +21,22 @@ tar -xf mirror-registry.tar.gz
 
 echo "Installing mirror-registry"
 
-sudo ./mirror-registry install --quayHostname=$($REGISTRY_URL$) --quayRoot=/home/ec2-user/registry-stuff > registry-install.log
+sudo ./mirror-registry install --quayHostname=$($REGISTRY_URL$) --quayRoot=$homedir/registry-stuff > registry-install.log
 
 echo "Get the password for the registry"
 
 password=$(cat registry-install.log | grep -o 'credentials (init, [^)]*)' | sed "s/credentials (init, \([^)]*\))/\1/")
 
-password_hash=$(echo -n "init:${password}" | base64 -w0)
+password_hash=$(echo -n "init:$${password}" | base64 -w0)
 
 echo "Get the URL of the registry"
 
 log_line="$(cat registry-install.log | grep 'Quay is available')"
 
-registry_URL="${log_line#*https://}"
-registry_URL="${registry_URL%% *}"
+registry_URL="$${log_line#*https://}"
+registry_URL="$${registry_URL%% *}"
 
 echo "Create the pull-secret with the credentials and store it under ./docker/config.json"
-
-homedir=/home/ec2-user/
 
 mkdir $homedir/.docker
 
@@ -44,7 +44,7 @@ cat <<EOF > "$homedir/pull-secret.template"
 $PULL_SECRET_CONTENT$
 EOF
 
-cp /home/ec2-user/pull-secret.template $homedir/.docker/config.json
+cp $homedir/pull-secret.template $homedir/.docker/config.json
 
 sed -i "s/CREDENTIALS/$password_hash/g" $homedir/.docker/config.json
 sed -i "s/REGISTRY-HOSTNAME/$registry_URL/g" $homedir/.docker/config.json
@@ -64,7 +64,7 @@ chmod +x $homedir/mirroring-workspace/oc-mirror
 
 echo "Adding the rootCA to the host so registry to be trusted"
 
-sudo cp /home/ec2-user/registry-stuff/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/
+sudo cp $homedir/registry-stuff/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/
 
 sudo update-ca-trust
 
@@ -75,7 +75,7 @@ apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 storageConfig:
   local:
-    path: /home/ec2-user/oc-mirror-metadata
+    path: $homedir/oc-mirror-metadata
 mirror:
   platform:
     channels:
@@ -128,7 +128,7 @@ platform:
     - ${private_subnet_3}
 publish: Internal
 pullSecret: 
-sshKey: |
+sshKey: 
 
 imageContentSources:
   - mirrors:
@@ -137,13 +137,18 @@ imageContentSources:
   - mirrors:
     - ip-10-0-0-7.eu-west-1.compute.internal:8443/openshift/release-images
     source: quay.io/openshift-release-dev/ocp-release
-additionalTrustBundle: |
+
 EOF
 
 echo "Fixing directory permissions"
 
 chown -R ec2-user:ec2-user $homedir/mirroring-workspace/
 chown -R ec2-user:ec2-user $homedir/cluster
+
+echo "Creating the install-config.yaml"
+
+echo "additionalTrustBundle:  |" >> $homedir/cluster/install-config.yaml
+echo "$(cat rootCA.pem)" | sed 's/^/      /' >> $homedir/cluster/install-config.yaml
 
 echo "Cleanup the mirroring-workspace"
 

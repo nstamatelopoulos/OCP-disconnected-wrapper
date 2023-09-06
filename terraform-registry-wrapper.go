@@ -202,11 +202,17 @@ func UpdateCreateTfFileRegistry(publicKey string, region string, amiID string) {
 		return
 	}
 
+	availZoneA := (region + "a")
+	availZoneB := (region + "b")
+	availZoneC := (region + "c")
+
 	// Replace the placeholder string with the generated public key path
 	replacedPublicKey := strings.ReplaceAll(string(templateContent), "PUBLIC_KEY_PATH", publicKey)
 	replacedRegion := strings.ReplaceAll(string(replacedPublicKey), "AWS_REGION", region)
-	replacedAvailabilityZone := strings.ReplaceAll(string(replacedRegion), "AVAILABILITY_ZONE", (region + "a"))
-	updatedFile := strings.ReplaceAll(string(replacedAvailabilityZone), "AMI_ID", amiID)
+	replacedAvailabilityZoneA := strings.ReplaceAll(string(replacedRegion), "AVAILABILITY_ZONE_A", availZoneA)
+	replacedAvailabilityZoneB := strings.ReplaceAll(string(replacedAvailabilityZoneA), "AVAILABILITY_ZONE_B", availZoneB)
+	replacedAvailabilityZoneC := strings.ReplaceAll(string(replacedAvailabilityZoneB), "AVAILABILITY_ZONE_C", availZoneC)
+	updatedFile := strings.ReplaceAll(string(replacedAvailabilityZoneC), "AMI_ID", amiID)
 	err = os.WriteFile("Build_Registry.tf", []byte(updatedFile), 0644)
 	if err != nil {
 		fmt.Println("Cannot write the Terraform config file")
@@ -223,43 +229,11 @@ func UpdateCreateTfFileCluster(region string) {
 		return
 	}
 
-	availZoneA := (region + "a")
-	availZoneB := (region + "b")
-	availZoneC := (region + "c")
-
 	// Replace the placeholder string with the generated public key path
 	replacedRegion := strings.ReplaceAll(string(templateContent), "AWS_REGION", region)
-	replacedAvailabilityZoneA := strings.ReplaceAll(string(replacedRegion), "AVAILABILITY_ZONE_A", availZoneA)
-	replacedAvailabilityZoneB := strings.ReplaceAll(string(replacedAvailabilityZoneA), "AVAILABILITY_ZONE_B", availZoneB)
-	updatedFile := strings.ReplaceAll(string(replacedAvailabilityZoneB), "AVAILABILITY_ZONE_C", availZoneC)
-	err = os.WriteFile("Build_Cluster_Dependencies.tf", []byte(updatedFile), 0644)
+	err = os.WriteFile("Build_Cluster_Dependencies.tf", []byte(replacedRegion), 0644)
 	if err != nil {
 		fmt.Println("Cannot write the Terraform config file")
 		return
 	}
 }
-
-/*
-func CombineTemporaryFiles() error {
-	// Read the contents of the registry temporary files
-	registryContent, err := os.ReadFile("./Cluster-dependencies.tf.temp")
-	if err != nil {
-		return fmt.Errorf("Cannot read temporary registry file: %v", err)
-	}
-	// Read the contents of the cluster temporary files
-	clusterContent, err := os.ReadFile("./Disconnected-registry.tf.temp")
-	if err != nil {
-		return fmt.Errorf("Cannot read temporary cluster file: %v", err)
-	}
-
-	// Combine the contents of the temporary files
-	combinedContent := append(registryContent, clusterContent...)
-
-	// Write the combined content to the output file
-	err = os.WriteFile("./Consolidated.tf", combinedContent, 0644)
-	if err != nil {
-		return fmt.Errorf("Cannot write the combined Terraform config file: %v", err)
-	}
-
-	return nil
-}*/

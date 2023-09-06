@@ -16,11 +16,41 @@ resource "aws_vpc" "disconnected-vpc" {
 resource "aws_subnet" "registry-subnet" {
   vpc_id     = aws_vpc.disconnected-vpc.id
   cidr_block = "10.0.0.0/28"
-  availability_zone = "AVAILABILITY_ZONE"
+  availability_zone = "AVAILABILITY_ZONE_A"
   map_public_ip_on_launch = true
 
   tags = {
     Name = "registry-subnet"
+  }
+}
+
+resource "aws_subnet" "private-1" {
+  vpc_id     = aws_vpc.disconnected-vpc.id
+  cidr_block = "10.0.0.32/27"
+  availability_zone = "AVAILABILITY_ZONE_A"
+  
+  tags = {
+    Name = "Private-1"
+  }
+}
+
+resource "aws_subnet" "private-2" {
+  vpc_id     = aws_vpc.disconnected-vpc.id
+  cidr_block = "10.0.0.64/27"
+  availability_zone = "AVAILABILITY_ZONE_B"
+
+  tags = {
+    Name = "Private-2"
+  }
+}
+
+resource "aws_subnet" "private-3" {
+  vpc_id     = aws_vpc.disconnected-vpc.id
+  cidr_block = "10.0.0.96/27"
+  availability_zone = "AVAILABILITY_ZONE_C"
+
+  tags = {
+    Name = "Private-3"
   }
 }
 
