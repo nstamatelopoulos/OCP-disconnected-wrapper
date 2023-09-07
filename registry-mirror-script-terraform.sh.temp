@@ -137,7 +137,6 @@ imageContentSources:
   - mirrors:
     - ip-10-0-0-7.eu-west-1.compute.internal:8443/openshift/release-images
     source: quay.io/openshift-release-dev/ocp-release
-
 EOF
 
 echo "Fixing directory permissions"
@@ -148,7 +147,7 @@ chown -R ec2-user:ec2-user $homedir/cluster
 echo "Creating the install-config.yaml"
 
 echo "additionalTrustBundle:  |" >> $homedir/cluster/install-config.yaml
-echo "$(cat rootCA.pem)" | sed 's/^/      /' >> $homedir/cluster/install-config.yaml
+echo "$(cat $homedir/registry-stuff/quay-rootCA/rootCA.pem)" | sed 's/^/      /' >> $homedir/cluster/install-config.yaml
 
 echo "Cleanup the mirroring-workspace"
 
