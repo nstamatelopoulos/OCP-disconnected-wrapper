@@ -4,12 +4,15 @@ echo "Creating root directory"
 
 homedir=/home/ec2-user
 
+hostname=$(hostname)
+
 mkdir $homedir/registry-stuff && cd $homedir/registry-stuff
 
 echo "Installing podman and wget"
 
 sudo yum install wget -y -q
 sudo yum install podman -y -q
+sudo yum install jq -y -q
 
 echo "Getting mirror-registry package"
 
@@ -79,15 +82,9 @@ storageConfig:
 mirror:
   platform:
     channels:
-      - name: stable-4.10
-  operators:
-    - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.10
-      headsOnly: false
-      packages:
-        - name: rhacs-operator
-          channels:
-          - name: latest
-          startingVersion: 3.67.0
+      - name: stable-4.12
+        minVersion: 4.12.13
+        maxVersion: 4.12.13
 EOF
 
 cat <<EOF > "$homedir/cluster/install-config.yaml"
@@ -121,21 +118,18 @@ networking:
   - 172.30.0.0/16
 platform:
   aws:
-    region: eu-west-1
+    region: ${region}
     subnets:
     - ${private_subnet_1}
     - ${private_subnet_2}
     - ${private_subnet_3}
 publish: Internal
-pullSecret: 
-sshKey: 
-
 imageContentSources:
   - mirrors:
-    - ip-10-0-0-7.eu-west-1.compute.internal:8443/openshift/release
+    - $hostname:8443/openshift/release
     source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
   - mirrors:
-    - ip-10-0-0-7.eu-west-1.compute.internal:8443/openshift/release-images
+    - $hostname:8443/openshift/release-images
     source: quay.io/openshift-release-dev/ocp-release
 EOF
 
@@ -144,10 +138,18 @@ echo "Fixing directory permissions"
 chown -R ec2-user:ec2-user $homedir/mirroring-workspace/
 chown -R ec2-user:ec2-user $homedir/cluster
 
-echo "Creating the install-config.yaml"
+echo "Adding the CA to the install-config.yaml"
 
 echo "additionalTrustBundle:  |" >> $homedir/cluster/install-config.yaml
 echo "$(cat $homedir/registry-stuff/quay-rootCA/rootCA.pem)" | sed 's/^/      /' >> $homedir/cluster/install-config.yaml
+
+echo "Adding the public-key to the install-config.yaml"
+
+echo "sshKey: $(cat $homedir/.ssh/authorized_keys)" >> $homedir/cluster/install-config.yaml
+
+echo "Adding pull-secret to the install-config.yaml"
+
+echo "pullSecret: '$(cat $homedir/.docker/config.json | jq -c )" >> $homedir/cluster/install-config.yaml
 
 echo "Cleanup the mirroring-workspace"
 
@@ -158,4 +160,3 @@ echo "Registry is ready to mirror"
 cat <<EOF > "$homedir/READY"
 The registry was initialized successfully!
 EOF
-
