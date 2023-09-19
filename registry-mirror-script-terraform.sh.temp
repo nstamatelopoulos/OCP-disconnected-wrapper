@@ -1,10 +1,26 @@
 #!/bin/bash 
 
+#=================================================================================================
 echo "Creating root directory"
+#=================================================================================================
+# Creating some variables
+#=================================================================================================
 
 homedir=/home/ec2-user
 
 hostname=$(hostname)
+
+CREATE_CLUSTER=false
+
+CLUSTER_VERSION=$PICK_A_VERSION$
+
+RELEASE_CHANNEL=$PICK_A_CHANNEL$
+
+RANDOM_VALUE=$RANDOM
+
+#=================================================================================================
+# Creating/Installing some dependencies
+#=================================================================================================
 
 mkdir $homedir/registry-stuff && cd $homedir/registry-stuff
 
@@ -13,6 +29,15 @@ echo "Installing podman and wget"
 sudo yum install wget -y -q
 sudo yum install podman -y -q
 sudo yum install jq -y -q
+sudo yum install unzip -y -q
+
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" 
+unzip awscliv2.zip
+sudo ./aws/install
+
+#=================================================================================================
+# Downloading and setting up mirror-registry
+#=================================================================================================
 
 echo "Getting mirror-registry package"
 
@@ -24,7 +49,7 @@ tar -xf mirror-registry.tar.gz
 
 echo "Installing mirror-registry"
 
-sudo ./mirror-registry install --quayHostname=$($REGISTRY_URL$) --quayRoot=$homedir/registry-stuff > registry-install.log
+sudo ./mirror-registry install --quayHostname=$(hostname) --quayRoot=$homedir/registry-stuff > registry-install.log
 
 echo "Get the password for the registry"
 
@@ -32,12 +57,9 @@ password=$(cat registry-install.log | grep -o 'credentials (init, [^)]*)' | sed 
 
 password_hash=$(echo -n "init:$${password}" | base64 -w0)
 
-echo "Get the URL of the registry"
-
-log_line="$(cat registry-install.log | grep 'Quay is available')"
-
-registry_URL="$${log_line#*https://}"
-registry_URL="$${registry_URL%% *}"
+#=================================================================================================
+# Creating the global pull-secret for the ec2-user using the init password and hostname
+#=================================================================================================
 
 echo "Create the pull-secret with the credentials and store it under ./docker/config.json"
 
@@ -50,12 +72,17 @@ EOF
 cp $homedir/pull-secret.template $homedir/.docker/config.json
 
 sed -i "s/CREDENTIALS/$password_hash/g" $homedir/.docker/config.json
-sed -i "s/REGISTRY-HOSTNAME/$registry_URL/g" $homedir/.docker/config.json
+sed -i "s/REGISTRY-HOSTNAME/$hostname/g" $homedir/.docker/config.json
+
+#=================================================================================================
+# Creating the filesystem required, Downloading oc-mirror and fixing the CA trust.
+#=================================================================================================
 
 echo "Create oc-mirror and cluster workspace directory"
 
 mkdir $homedir/mirroring-workspace
 mkdir $homedir/cluster
+mkdir $homedir/.aws
 
 echo "Downloading oc-mirror"
 
@@ -73,6 +100,10 @@ sudo update-ca-trust
 
 echo "Create the imageset-config.yaml and install-config.yaml template file"
 
+#=================================================================================================
+# Creating/Building imageset-config.yaml and install-config.yaml
+#=================================================================================================
+
 cat <<EOF > "$homedir/mirroring-workspace/imageset-config.yaml"
 apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
@@ -82,14 +113,15 @@ storageConfig:
 mirror:
   platform:
     channels:
-      - name: stable-4.12
-        minVersion: 4.12.13
-        maxVersion: 4.12.13
+      - name: $RELEASE_CHANNEL
+        minVersion: $CLUSTER_VERSION
+        maxVersion: $CLUSTER_VERSION
 EOF
 
 cat <<EOF > "$homedir/cluster/install-config.yaml"
 apiVersion: v1
 baseDomain: emea.aws.cee.support
+credentialsMode: Passthrough
 compute:
 - architecture: amd64
   hyperthreading: Enabled
@@ -104,7 +136,7 @@ controlPlane:
   replicas: 3
 metadata:
   creationTimestamp: null
-  name: nstamate-disconnected
+  name: disconnected-$RANDOM_VALUE
 networking:
   clusterNetwork:
   - cidr: 10.128.0.0/14
@@ -133,6 +165,12 @@ imageContentSources:
     source: quay.io/openshift-release-dev/ocp-release
 EOF
 
+cat <<EOF > "$homedir/.aws/credentials"
+[default]
+***REMOVED***
+***REMOVED***
+EOF
+
 echo "Fixing directory permissions"
 
 chown -R ec2-user:ec2-user $homedir/mirroring-workspace/
@@ -149,14 +187,107 @@ echo "sshKey: $(cat $homedir/.ssh/authorized_keys)" >> $homedir/cluster/install-
 
 echo "Adding pull-secret to the install-config.yaml"
 
-echo "pullSecret: '$(cat $homedir/.docker/config.json | jq -c )" >> $homedir/cluster/install-config.yaml
+echo "pullSecret: '$(cat $homedir/.docker/config.json | jq -c )'" >> $homedir/cluster/install-config.yaml
 
 echo "Cleanup the mirroring-workspace"
 
 rm $homedir/mirroring-workspace/oc-mirror.tar.gz
+
+#=================================================================================================
+# Let the user know that the mirror registry is ready to use
+#=================================================================================================
 
 echo "Registry is ready to mirror"
 
 cat <<EOF > "$homedir/READY"
 The registry was initialized successfully!
 EOF
+
+echo "Starting Cluster deployment preparations"
+
+#=================================================================================================
+# If the user selected to create a cluster along with the Registry do the appropriate actions.
+#=================================================================================================
+
+if CREATE_CLUSTER=true
+then
+#===========================================================================================================
+# Downloading, unpacking installer, oc client and make changes to the manifest prior installing the cluster
+#===========================================================================================================
+   
+   echo "Mirroring release images for version $CLUSTER_VERSION"
+   cd $homedir/mirroring-workspace/
+   runuser -u ec2-user -- ./oc-mirror --config imageset-config.yaml docker://$hostname:8443
+
+   cd $homedir/cluster
+   echo "Downloading openshift-installer for version $CLUSTER_VERSION"
+   wget https://mirror.openshift.com/pub/openshift-v4/clients/ocp/$CLUSTER_VERSION/openshift-install-linux.tar.gz
+
+   echo "Unpacking openshift-installer"
+   tar -xf openshift-install-linux.tar.gz
+   rm openshift-install-linux.tar.gz
+
+   echo "Downloading openshift-client"
+   wget https://mirror.openshift.com/pub/openshift-v4/clients/ocp/$CLUSTER_VERSION/openshift-client-linux.tar.gz
+
+   echo "Unpacking openshift-client"
+   tar -xf openshift-client-linux.tar.gz
+   rm openshift-client-linux.tar.gz
+
+   echo "Creating manifests"
+   runuser -u ec2-user -- cp install-config.yaml install-config.yaml.bak
+   runuser -u ec2-user -- ./openshift-install create manifests --dir ./
+   chown -R ec2-user:ec2-user $homedir/cluster
+
+   echo "Changing the DNS cluster manifest to avoid ingress operator try to add "*.apps" domain"
+   cd $homedir/cluster/manifests
+   sed '/baseDomain:/q' cluster-dns-02-config.yml > new-cluster-dns-02-config.yml && mv new-cluster-dns-02-config.yml cluster-dns-02-config.yml
+   
+
+#===========================================================================================================
+# Launch cluster installation
+#===========================================================================================================
+   echo "Launch cluster installation"
+   cd $homedir/cluster
+   runuser -u ec2-user -- ./openshift-install create cluster --dir ./ --log-level=info
+
+#===========================================================================================================
+# Adding manually *apps. domain using aws CLI
+#===========================================================================================================
+   echo "Adding manually *apps. domain using aws CLI"
+
+   DOMAIN=disconnected-$RANDOM_VALUE.emea.aws.cee.support
+   HOSTED_ZONE_ID=$(aws route53 list-hosted-zones-by-name --dns-name $DOMAIN | jq -r '.HostedZones[0].Id')
+   ELB_ALIAS_TARGET=$(aws elb describe-load-balancers --region ${region}  --load-balancer-names | jq -r '.LoadBalancerDescriptions[0].CanonicalHostedZoneNameID')
+   ELB_DNS_NAME=$(aws elb describe-load-balancers --region ${region}  --load-balancer-names | jq -r '.LoadBalancerDescriptions[0].DNSName')
+   
+   echo "The domain of the zone is:" $DOMAIN
+   echo "The elb hosted zone ID is: $ELB_ALIAS_TARGET" 
+   echo "The elb DNS name is: "$ELB_DNS_NAME
+   
+   runuser -u ec2-user -- aws route53 change-resource-record-sets \
+   --hosted-zone-id "$HOSTED_ZONE_ID" \
+   --change-batch '{
+     "Changes": [
+       {
+         "Action": "CREATE",
+         "ResourceRecordSet": {
+           "Name": "*.apps.'$DOMAIN'",
+           "Type": "A",
+           "AliasTarget": {
+             "HostedZoneId": "'$ELB_ALIAS_TARGET'",
+             "DNSName": "'$ELB_DNS_NAME'",
+             "EvaluateTargetHealth": false
+           }
+         }
+       }
+     ]
+   }'
+   
+   su ec2-user
+   whoami
+   touch ./test-user
+   fi
+
+
+

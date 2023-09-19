@@ -48,6 +48,7 @@ func main() {
 	clusterFlag := flag.Bool("cluster", false, "Create a disconnected cluster. Default value False")
 	pullSecretPath := flag.String("pull-secret", "", "Set the Path to the user provided pull-secret")
 	publicKeyPath := flag.String("public-key", "", "Set the path to the user public key")
+	clusterVersion := flag.String("cluster-version", "", "Set the prefered cluster version")
 
 	flag.Parse()
 
@@ -58,7 +59,7 @@ func main() {
 			return
 		}
 
-		installRegistry(*clusterFlag, *pullSecretPath, *publicKeyPath, *region, amiID)
+		installRegistry(*clusterFlag, *pullSecretPath, *publicKeyPath, *region, amiID, *clusterVersion)
 	} else if *destroyFlag {
 		destroyRegistry()
 	}
@@ -79,7 +80,7 @@ func runTerraform(mode string) error {
 	return nil
 }
 
-func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath string, region string, region_ami string) {
+func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath string, region string, region_ami string, clusterVersion string) {
 
 	cmd := exec.Command("terraform", "init")
 	cmd.Stdout = os.Stdout
@@ -91,7 +92,7 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 	//Create new PullSecretTemplate
 	createPullSecretTemplate(pullSecretPath)
 	//Update the Bash Script with the provided information from the user.
-	updateBashScript(clusterFlag)
+	updateBashScript(clusterFlag, clusterVersion)
 	//Replace the appropriate values in registry template terraform file
 	UpdateCreateTfFileRegistry(publicKeyPath, region, region_ami)
 	//If cluster flag is used replace the appropriate values in cluster dependencies terraform file
@@ -121,45 +122,52 @@ func destroyRegistry() {
 }
 
 // The updateBashScript function is changes the variables of the bash script template and writes it in a new file.
-func updateBashScript(private bool) {
-	var urlString string
-	if private {
-		urlString = "hostname"
-	} else {
-		urlString = "curl -s http://169.254.169.254/latest/meta-data/public-hostname"
-	}
+func updateBashScript(private bool, clusterVersion string) {
+	// Set hostname to the mirror-registry
 	pullSecretContent, err := os.ReadFile(pullSecretTemplate)
 	if err != nil {
 		println("Cannot read the pull-secret")
 	}
 	pullSecretTemplateAsString := string(pullSecretContent)
-	//Map of the replacement strings in the script file
-	replacements := map[string]string{
-		"$PULL_SECRET_CONTENT$": pullSecretTemplateAsString,
-		"$REGISTRY_URL$":        urlString,
-	}
+	//Read registry template script file
 	scriptContent, err := os.ReadFile(registryScriptTemplate)
 	if err != nil {
 		println("Cannot read the registry script template file")
 	}
-	scriptContentAsString := string(scriptContent)
-	for oldString, newString := range replacements {
-		scriptContentAsString = strings.ReplaceAll(scriptContentAsString, oldString, newString)
-	}
-	error := os.WriteFile(registryScript, []byte(scriptContentAsString), 0644)
-	if error != nil {
-		println("Cannot write the changes to the registry script file")
+	//Update the variables with their value
+	addPullSecret := strings.ReplaceAll(string(scriptContent), "$PULL_SECRET_CONTENT$", pullSecretTemplateAsString)
+	//If the private flag is true add the cluster variable in the registry script
+	if private {
+		addClusterFlag := strings.ReplaceAll(addPullSecret, "CREATE_CLUSTER=false", "CREATE_CLUSTER=true")
+		setClusterVersionVar := strings.ReplaceAll(addClusterFlag, "$PICK_A_VERSION$", clusterVersion)
+		// Create the Release channel from the cluster version provided from the user
+		parts := strings.Split(clusterVersion, ".")
+		if len(parts) >= 2 {
+			// Take the first two parts and concatenate "stable-" in front of them
+			clusterReleaseChannnel := "stable-" + parts[0] + "." + parts[1]
+			setReleaseChannel := strings.ReplaceAll(setClusterVersionVar, "$PICK_A_CHANNEL$", clusterReleaseChannnel)
+
+			withCluster := os.WriteFile(registryScript, []byte(setReleaseChannel), 0644)
+			if withCluster != nil {
+				println("Cannot write the cluster variable to the registry script file")
+			}
+			//If the private flag is not true then simply write the file with the default changes
+		} else {
+			withoutCluster := os.WriteFile(registryScript, []byte(addPullSecret), 0644)
+			if withoutCluster != nil {
+				println("Cannot write the pull-secret to the registry script file")
+			}
+		}
 	}
 }
 
 // To clean up the bash script generated file after successfull deployment of the registry.
+
 func deleteGeneratedFiles() {
 	Script := os.Remove(registryScript)
 	PullSecretTemp := os.Remove(pullSecretTemplate)
 
 	if Script != nil || PullSecretTemp != nil {
-		// If an error occurs, print the error message
-		//fmt.Println("one file is not deleted")
 		return
 	}
 }
@@ -179,7 +187,7 @@ func createPullSecretTemplate(pullSecret string) {
 		"auth":  "CREDENTIALS",
 		"email": "registry@example.com",
 	}
-	auths["REGISTRY-HOSTNAME"] = newAuth
+	auths["REGISTRY-HOSTNAME:8443"] = newAuth
 
 	// Convert the updated pullSecretMap back to JSON
 	updatedData, _ := json.MarshalIndent(pullSecretMap, "", "  ")
