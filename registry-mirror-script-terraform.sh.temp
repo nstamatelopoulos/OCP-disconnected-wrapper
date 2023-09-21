@@ -167,12 +167,6 @@ imageContentSources:
     source: quay.io/openshift-release-dev/ocp-release
 EOF
 
-cat <<EOF > "$homedir/.aws/credentials"
-[default]
-***REMOVED***
-***REMOVED***
-EOF
-
 echo "Fixing directory permissions"
 
 chown -R ec2-user:ec2-user $homedir/mirroring-workspace/
