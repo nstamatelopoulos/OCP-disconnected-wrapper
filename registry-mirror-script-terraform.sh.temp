@@ -205,7 +205,7 @@ echo "Starting Cluster deployment preparations"
 # If the user selected to create a cluster along with the Registry do the appropriate actions.
 #=================================================================================================
 
-if CREATE_CLUSTER=true
+if [ "$CREATE_CLUSTER" = "true" ]
 then
 #===========================================================================================================
 # Downloading, unpacking installer, oc client and make changes to the manifest prior installing the cluster

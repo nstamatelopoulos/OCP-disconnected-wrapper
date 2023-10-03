@@ -82,11 +82,6 @@ func runTerraform(mode string) error {
 
 func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath string, region string, region_ami string, clusterVersion string) {
 
-	cmd := exec.Command("terraform", "init")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	cmd.Run()
 	// Delete left over templates
 	deleteGeneratedFiles()
 	//Create new PullSecretTemplate
@@ -100,6 +95,13 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 		UpdateCreateTfFileCluster(region)
 		//CombineTemporaryFiles()
 	}
+
+	cmd := exec.Command("terraform", "init")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	cmd.Run()
+
 	mode := "apply"
 	// Run the terraform command
 	err := runTerraform(mode)
@@ -152,11 +154,11 @@ func updateBashScript(private bool, clusterVersion string) {
 				println("Cannot write the cluster variable to the registry script file")
 			}
 			//If the private flag is not true then simply write the file with the default changes
-		} else {
-			withoutCluster := os.WriteFile(registryScript, []byte(addPullSecret), 0644)
-			if withoutCluster != nil {
-				println("Cannot write the pull-secret to the registry script file")
-			}
+		}
+	} else {
+		withoutCluster := os.WriteFile(registryScript, []byte(addPullSecret), 0644)
+		if withoutCluster != nil {
+			println("Cannot write the pull-secret to the registry script file")
 		}
 	}
 }
