@@ -82,11 +82,6 @@ func runTerraform(mode string) error {
 
 func installRegistry(privateFlag bool, pullSecretPath string, publicKeyPath string, region string, region_ami string, availabilityZone string) {
 
-	cmd := exec.Command("terraform", "init")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	cmd.Run()
 	// Delete left over templates
 	deleteGeneratedFiles()
 	//Create new PullSecretTemplate
@@ -95,6 +90,13 @@ func installRegistry(privateFlag bool, pullSecretPath string, publicKeyPath stri
 	updateBashScript(privateFlag)
 	//Import the SSH public and private key to the terraform file to be used from instance creation and file provisioners.
 	UpdateTerraformtemplateAndCreateTerraformConfigFile(publicKeyPath, region, region_ami, availabilityZone)
+
+	cmd := exec.Command("terraform", "init")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	cmd.Run()
+
 	mode := "apply"
 	// Run the terraform command
 	err := runTerraform(mode)
