@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -16,6 +17,7 @@ const (
 	registryScriptTemplate = "./registry-mirror-script-terraform.sh.temp"
 	registryScript         = "./registry-mirror-script-terraform.tpl"
 	pullSecretTemplate     = "./pull-secret.template"
+	initFileName           = "initData.json"
 )
 
 var regions = map[string]string{
@@ -38,6 +40,8 @@ var regions = map[string]string{
 	"ca-central":     "ami-0c3d3a230b9668c02",
 	"sa-east-1":      "ami-0c1b8b886626f940c",
 }
+var pullSecretPath string
+var publicKeyPath string
 
 func main() {
 
@@ -46,24 +50,38 @@ func main() {
 	installFlag := flag.Bool("install", false, "Install Registry")
 	destroyFlag := flag.Bool("destroy", false, "Destroy Registry")
 	clusterFlag := flag.Bool("cluster", false, "Create a disconnected cluster. Default value False")
-	pullSecretPath := flag.String("pull-secret", "", "Set the Path to the user provided pull-secret")
-	publicKeyPath := flag.String("public-key", "", "Set the path to the user public key")
 	clusterVersion := flag.String("cluster-version", "", "Set the prefered cluster version")
+	initFlag := flag.Bool("init", false, "Saving pull-secret and public-key for ease of use")
 
 	flag.Parse()
 
+	// If init flag is used then start interactive prompt to get the paths
+	if *initFlag {
+		initialization(initFileName)
+	}
+
+	// If the install flag is used do appropriate actions for installation
 	if *installFlag {
+		// Delete left over templates
+		deleteGeneratedFiles()
+
+		if _, err := os.Stat(initFileName); os.IsNotExist(err) {
+			fmt.Println("Error: The pull-Secret Path and public-Key Path must be provided. Running init interactive prompt")
+			//getInitData(initFileName)
+			initialization(initFileName)
+		}
 		amiID, found := regions[*region]
 		if !found {
 			fmt.Println("Invalid or unsupported region:", *region)
 			return
 		}
+		pullSecretPath, publicKeyPath = readPathsFromFile(initFileName)
+		installRegistry(*clusterFlag, pullSecretPath, publicKeyPath, *region, amiID, *clusterVersion)
 
-		installRegistry(*clusterFlag, *pullSecretPath, *publicKeyPath, *region, amiID, *clusterVersion)
+		// If destroy flag is used destroy all
 	} else if *destroyFlag {
 		destroyRegistry()
 	}
-
 }
 
 // This function executes the terraform command, Can be either apply or destroy.
@@ -82,18 +100,15 @@ func runTerraform(mode string) error {
 
 func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath string, region string, region_ami string, clusterVersion string) {
 
-	// Delete left over templates
-	deleteGeneratedFiles()
-	//Create new PullSecretTemplate
+	// Create new PullSecretTemplate
 	createPullSecretTemplate(pullSecretPath)
-	//Update the Bash Script with the provided information from the user.
+	// Update the Bash Script with the provided information from the user.
 	updateBashScript(clusterFlag, clusterVersion)
-	//Replace the appropriate values in registry template terraform file
+	// Replace the appropriate values in registry template terraform file
 	UpdateCreateTfFileRegistry(publicKeyPath, region, region_ami)
-	//If cluster flag is used replace the appropriate values in cluster dependencies terraform file
+	// If cluster flag is used replace the appropriate values in cluster dependencies terraform file
 	if clusterFlag {
 		UpdateCreateTfFileCluster(region)
-		//CombineTemporaryFiles()
 	}
 
 	cmd := exec.Command("terraform", "init")
@@ -118,8 +133,6 @@ func destroyRegistry() {
 		log.Fatalf("Failed to execute terraform destroy: %v", err)
 		return
 	}
-	os.Remove(cluster_TF)
-	os.Remove(registry_TF)
 	deleteGeneratedFiles()
 }
 
@@ -131,14 +144,14 @@ func updateBashScript(private bool, clusterVersion string) {
 		println("Cannot read the pull-secret")
 	}
 	pullSecretTemplateAsString := string(pullSecretContent)
-	//Read registry template script file
+	// Read registry template script file
 	scriptContent, err := os.ReadFile(registryScriptTemplate)
 	if err != nil {
 		println("Cannot read the registry script template file")
 	}
-	//Update the variables with their value
+	// Update the variables with their value
 	addPullSecret := strings.ReplaceAll(string(scriptContent), "$PULL_SECRET_CONTENT$", pullSecretTemplateAsString)
-	//If the private flag is true add the cluster variable in the registry script
+	// If the private flag is true add the cluster variable in the registry script
 	if private {
 		addClusterFlag := strings.ReplaceAll(addPullSecret, "CREATE_CLUSTER=false", "CREATE_CLUSTER=true")
 		setClusterVersionVar := strings.ReplaceAll(addClusterFlag, "$PICK_A_VERSION$", clusterVersion)
@@ -153,7 +166,7 @@ func updateBashScript(private bool, clusterVersion string) {
 			if withCluster != nil {
 				println("Cannot write the cluster variable to the registry script file")
 			}
-			//If the private flag is not true then simply write the file with the default changes
+			// If the private flag is not true then simply write the file with the default changes
 		}
 	} else {
 		withoutCluster := os.WriteFile(registryScript, []byte(addPullSecret), 0644)
@@ -168,6 +181,8 @@ func updateBashScript(private bool, clusterVersion string) {
 func deleteGeneratedFiles() {
 	Script := os.Remove(registryScript)
 	PullSecretTemp := os.Remove(pullSecretTemplate)
+	os.Remove(cluster_TF)
+	os.Remove(registry_TF)
 
 	if Script != nil || PullSecretTemp != nil {
 		return
@@ -177,10 +192,18 @@ func deleteGeneratedFiles() {
 // It creates the pull Secret Template from the pull-secret.json provided by the user
 func createPullSecretTemplate(pullSecret string) {
 	// convert the string file to []byte and add it to data variable
-	data, _ := os.ReadFile(pullSecret)
+	data, err := os.ReadFile(pullSecret)
+	if err != nil {
+		fmt.Printf("Failed to read the pullSecret file: %v\n", err)
+		return
+	}
 
 	// Parse the JSON data into a map[string]interface{}
 	var pullSecretMap map[string]interface{}
+	if err := json.Unmarshal(data, &pullSecretMap); err != nil {
+		fmt.Printf("Failed to unmarshal JSON data: %v\n", err)
+		return
+	}
 	json.Unmarshal(data, &pullSecretMap)
 
 	// Add the new section under "auths"
@@ -195,8 +218,8 @@ func createPullSecretTemplate(pullSecret string) {
 	updatedData, _ := json.MarshalIndent(pullSecretMap, "", "  ")
 
 	// Write the updated JSON data to a separate file
-	err := os.WriteFile(pullSecretTemplate, updatedData, 0644)
-	if err != nil {
+	error := os.WriteFile(pullSecretTemplate, updatedData, 0644)
+	if error != nil {
 		fmt.Println("Failed to create the pull-secret template file")
 		return
 	}
@@ -246,4 +269,94 @@ func UpdateCreateTfFileCluster(region string) {
 		fmt.Println("Cannot write the Terraform config file")
 		return
 	}
+}
+
+func interactiveCLIFunction(question string) string {
+	var s string
+	r := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Fprint(os.Stderr, question+" ")
+		s, _ = r.ReadString('\n')
+		if s != "" {
+			break
+		}
+	}
+	return strings.TrimSpace(s)
+}
+
+func writePathsToFile(filename string, pathMap map[string]string) error {
+	// Convert the map in JSON format.
+	data, err := json.Marshal(pathMap)
+	if err != nil {
+		return err
+	}
+
+	// Create the json file so it is overriden each time the init is run
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+
+	// Write the data in a json file
+	_, err = file.Write(data)
+	return err
+}
+
+func readPathsFromFile(filename string) (pullSecret string, publickey string) {
+	// Read the json file
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		fmt.Println("Cannot Read init file")
+	}
+	// Return the contents in a map
+	var pathMap map[string]string
+	err = json.Unmarshal(data, &pathMap)
+	if err != nil {
+		fmt.Println("Cannot get pull-secret and public-key paths from init file")
+	}
+
+	pullSecretPathCurrent := pathMap["PullSecretPath"]
+	publicKeyPathCurrent := pathMap["PublicKeyPath"]
+
+	return pullSecretPathCurrent, publicKeyPathCurrent
+}
+
+func getInitData(filepath string) {
+	// Create a Map to store the paths provided
+	pathMap := make(map[string]string)
+
+	// Get the paths using interactive CLI
+	pullSecretPathTemp := interactiveCLIFunction("Provide the absolute path of the pull-secret")
+
+	// Check if the provided path is valid. If not run the initialization function
+	if _, err := os.ReadFile(pullSecretPathTemp); err != nil {
+		fmt.Printf("Failed to read the pullSecret file: %v\n", err)
+		fmt.Println("Please provide a valid path")
+		initialization(initFileName)
+	}
+	publicKeyPathTemp := interactiveCLIFunction("Provide the absolute path of the public key")
+
+	// Check if the provided path is valid. If not run the initialization function
+	if _, err := os.ReadFile(publicKeyPathTemp); err != nil {
+		fmt.Printf("Failed to read the pullSecret file: %v\n", err)
+		fmt.Println("Please provide a valid path")
+		initialization(initFileName)
+	}
+
+	// Add paths and identifiers to the map
+	pathMap["PullSecretPath"] = pullSecretPathTemp
+	pathMap["PublicKeyPath"] = publicKeyPathTemp
+
+	writePathsToFile(filepath, pathMap)
+}
+
+// Initializing the program and asks for required files
+func initialization(initFile string) {
+	deleteGeneratedFiles()
+	getInitData(initFile)
+	pullSecretPath, publicKeyPath = readPathsFromFile(initFile)
+	fmt.Printf("Using pull-secret from file: %v\n", pullSecretPath)
+	fmt.Printf("Using public-key from file: %v\n", publicKeyPath)
 }

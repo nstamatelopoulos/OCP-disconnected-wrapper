@@ -8,3 +8,4 @@ pull-secret.template
 Disconnected.tf
 .vscode/
 terraform
+initData.json

@@ -172,6 +172,10 @@ echo "Fixing directory permissions"
 chown -R ec2-user:ec2-user $homedir/mirroring-workspace/
 chown -R ec2-user:ec2-user $homedir/cluster
 
+#=================================================================================================
+# Creating the install-config.yaml
+#=================================================================================================
+
 echo "Adding the CA to the install-config.yaml"
 
 echo "additionalTrustBundle:  |" >> $homedir/cluster/install-config.yaml
@@ -185,9 +189,10 @@ echo "Adding pull-secret to the install-config.yaml"
 
 echo "pullSecret: '$(cat $homedir/.docker/config.json | jq -c )'" >> $homedir/cluster/install-config.yaml
 
-echo "Cleanup the mirroring-workspace"
+echo "Cleanup the workspace"
 
 rm $homedir/mirroring-workspace/oc-mirror.tar.gz
+rm $homedir/pull-secret.template
 
 #=================================================================================================
 # Let the user know that the mirror registry is ready to use
@@ -199,8 +204,6 @@ cat <<EOF > "$homedir/READY"
 The registry was initialized successfully!
 EOF
 
-echo "Starting Cluster deployment preparations"
-
 #=================================================================================================
 # If the user selected to create a cluster along with the Registry do the appropriate actions.
 #=================================================================================================
@@ -210,6 +213,8 @@ then
 #===========================================================================================================
 # Downloading, unpacking installer, oc client and make changes to the manifest prior installing the cluster
 #===========================================================================================================
+
+   echo "Starting Cluster deployment preparations"
 
    echo "Mirroring release images for version $CLUSTER_VERSION"
    cd $homedir/mirroring-workspace/
@@ -254,7 +259,7 @@ then
 
   while ! grep -q "Waiting up to 40m0s" $homedir/cluster/.openshift_install.log ; do
 
-        echo "LB and zone is not yet ready"
+        echo "LB and zone are not yet ready yet"
         sleep 120
 
   done
