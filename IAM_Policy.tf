@@ -1,3 +1,7 @@
+#=====================================================================================================================================
+# All policies required for the IAM role to deploy a cluster on AWS
+#=====================================================================================================================================
+
 resource "aws_iam_policy" "EC2_policy" {
   name        = "EC2_policy"
   description = "These are the required permissions to allow the installer manage the EC2 instances. Allows only in the created VPC"
@@ -54,7 +58,7 @@ resource "aws_iam_policy" "EC2_policy" {
         "ec2:RunInstances",
         "ec2:TerminateInstances"
       ],
-      "Resource": "arn:aws:ec2:${data.aws_region.current.name}:282572373250:vpc/${aws_vpc.disconnected-vpc.id}"
+      "Resource": "*"
     }
   ]
 }
@@ -120,7 +124,7 @@ resource "aws_iam_policy" "LB_policy" {
                 "elasticloadbalancing:RegisterInstancesWithLoadBalancer",
                 "elasticloadbalancing:SetLoadBalancerPoliciesOfListener"
             ],
-            "Resource": "arn:aws:ec2:${data.aws_region.current.name}:282572373250:vpc/${aws_vpc.disconnected-vpc.id}"
+            "Resource": "*"
         }
     ]
 }
@@ -153,7 +157,7 @@ resource "aws_iam_policy" "LBv2_policy" {
                 "elasticloadbalancing:ModifyTargetGroupAttributes",
                 "elasticloadbalancing:RegisterTargets"
             ],
-            "Resource": "arn:aws:ec2:${data.aws_region.current.name}:282572373250:vpc/${aws_vpc.disconnected-vpc.id}"
+            "Resource": "*"
         }
     ]
 }

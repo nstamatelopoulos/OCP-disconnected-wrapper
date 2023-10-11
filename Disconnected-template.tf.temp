@@ -130,6 +130,10 @@ resource "aws_instance" "mirror-registry" {
   subnet_id     = aws_subnet.registry-subnet.id
   vpc_security_group_ids = [aws_security_group.registry-sg.id]
 
+  count = var.use_iam_role ? 1 : 0
+
+  iam_instance_profile = var.use_iam_role ?  aws_iam_role.Disconnected_cluster_deployer.name : null
+
   user_data = templatefile("registry-mirror-script-terraform.tpl", {
         private_subnet_1 = aws_subnet.private-1.id
         private_subnet_2 = aws_subnet.private-2.id
