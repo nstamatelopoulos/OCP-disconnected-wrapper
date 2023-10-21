@@ -35,16 +35,6 @@ resource "aws_iam_access_key" "Cluster_deployer_key" {
   user    = aws_iam_user.Cluster_deployer.name
 }
 
-output "access_key_id" {
-  value = aws_iam_access_key.Cluster_deployer_key.id
-  sensitive = true
-}
-
-output "access_key_secret" {
-  value = aws_iam_access_key.Cluster_deployer_key.secret
-  sensitive = true
-}
-
 #=====================================================================================================================================
 # All data source resources for the policies
 #=====================================================================================================================================

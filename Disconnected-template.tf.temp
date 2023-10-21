@@ -135,8 +135,10 @@ resource "aws_instance" "mirror-registry" {
         private_subnet_2 = aws_subnet.private-2.id
         private_subnet_3 = aws_subnet.private-3.id
         region           = data.aws_region.current.name
+        access_key_id     = aws_iam_access_key.Cluster_deployer_key.id
+        access_key_secret = aws_iam_access_key.Cluster_deployer_key.secret   
   })
-
+  
   root_block_device {
     volume_size = 700
     volume_type = "gp2"
@@ -148,14 +150,15 @@ resource "aws_instance" "mirror-registry" {
 
 }
 
+
 locals {
   registry_public_dns = aws_instance.mirror-registry[*].public_dns
 }
 
-output "ec2_instance_public_dns" {
-  description = "SSH command to connect to the EC2 instance"
-  value       = "To connect to the registry run ssh -i <your-private-key> ec2-user@${aws_instance.mirror-registry.public_dns}"
-}
+#output "ec2_instance_public_dns" {
+ # description = "SSH command to connect to the EC2 instance"
+  #value       = "To connect to the registry run ssh -i <your-private-key> ec2-user@${aws_instance.mirror-registry.public_dns}"
+#}
 
 output "wait_for_initialization" {
   description = "Initialization instructions"
