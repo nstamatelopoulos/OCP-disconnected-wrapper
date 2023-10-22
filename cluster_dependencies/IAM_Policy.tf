@@ -63,7 +63,8 @@ resource "aws_iam_user_policy" "Installer_policy_document" {
       "iam:ListAccessKeys",
       "iam:PutUserPolicy",
       "iam:TagUser",
-      "servicequotas:ListAWSDefaultServiceQuotas"
+      "servicequotas:ListAWSDefaultServiceQuotas",
+      "tag:UntagResources"
       ],
 
       "Resource": "*"
@@ -71,4 +72,8 @@ resource "aws_iam_user_policy" "Installer_policy_document" {
   ]
 }
 EOF
+}
+
+output IAM_User_Policy_Name {
+  value = aws_iam_user_policy.Installer_policy_document.name
 }

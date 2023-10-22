@@ -42,5 +42,17 @@ resource "aws_iam_access_key" "Cluster_deployer_key" {
 # resource "aws_iam_policy_attachment" "AllPermissions_attachment" {
 #   name       = "AllPermissionsAttachment"
 #   roles      = [aws_iam_role.Disconnected_cluster_deployer.name]
-#   policy_arn = aws_iam_policy.Installer_policy.arn
+#   policy_arn = aws_iam_policy.Installer_policy.arnIAM_User_Access_key
 # }
+
+output IAM_User_name {
+  value = aws_iam_user.Cluster_deployer.name
+}
+
+output IAM_User_Access_Key_id {
+  value = aws_iam_access_key.Cluster_deployer_key.id
+}
+
+output IAM_User_Access_key_Secret {
+  value = aws_iam_access_key.Cluster_deployer_key.secret
+}

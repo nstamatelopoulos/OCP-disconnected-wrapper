@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	cluster_TF             = "./Build_Cluster_Dependencies.tf"
-	registry_TF            = "./Build_Registry.tf"
+	// cluster_TF             = "./Build_Cluster_Dependencies.tf"
+	// registry_TF            = "./Build_Registry.tf"
 	registryScriptTemplate = "./registry-mirror-script-terraform.sh.temp"
 	registryScript         = "./registry-mirror-script-terraform.tpl"
 	pullSecretTemplate     = "./pull-secret.template"
@@ -80,6 +80,16 @@ func main() {
 
 		// If destroy flag is used destroy all
 	} else if *destroyFlag {
+		cluster_destroyed := interactiveCLIFunction("Did you destroy the cluster (yes|no)")
+		if cluster_destroyed == "no" {
+			fmt.Println("Please destroy the cluster before you destroy the registry")
+			os.Exit(1)
+		} else if cluster_destroyed == "yes" {
+			fmt.Println("Destroying the registry")
+		} else {
+			fmt.Println("No valid answer. Please type yes or no")
+			return
+		}
 		destroyRegistry()
 	}
 }
@@ -104,12 +114,14 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 	createPullSecretTemplate(pullSecretPath)
 	// Update the Bash Script with the provided information from the user.
 	updateBashScript(clusterFlag, clusterVersion)
-	// Replace the appropriate values in registry template terraform file
-	UpdateCreateTfFileRegistry(publicKeyPath, region, region_ami)
 	// If cluster flag is used replace the appropriate values in cluster dependencies terraform file
 	if clusterFlag {
-		UpdateCreateTfFileCluster(region)
+		SetClusterFlagTerraform(clusterFlag)
 	}
+	// Set the Flag to false
+	SetClusterFlagTerraform(clusterFlag)
+	// Replace the appropriate values in registry template terraform file
+	UpdateCreateTfFileRegistry(publicKeyPath, region, region_ami)
 
 	cmd := exec.Command("terraform", "init")
 	cmd.Stdout = os.Stdout
@@ -181,8 +193,9 @@ func updateBashScript(private bool, clusterVersion string) {
 func deleteGeneratedFiles() {
 	Script := os.Remove(registryScript)
 	PullSecretTemp := os.Remove(pullSecretTemplate)
-	os.Remove(cluster_TF)
-	os.Remove(registry_TF)
+	// os.Remove(cluster_TF)
+	// os.Remove(registry_TF)
+	os.Remove("terraform.tfvars")
 
 	if Script != nil || PullSecretTemp != nil {
 		return
@@ -227,9 +240,11 @@ func createPullSecretTemplate(pullSecret string) {
 
 func UpdateCreateTfFileRegistry(publicKey string, region string, amiID string) {
 
+	// Where to put the cluster flag?????
+
 	// Read the contents of the Terraform template file
 	fmt.Println("Updating and creating the Registry terraform file")
-	templateContent, err := os.ReadFile("Disconnected-template.tf.temp")
+	templateContent, err := os.ReadFile("terraform.tfvars")
 	if err != nil {
 		fmt.Println("Cannot read template file")
 		return
@@ -240,31 +255,41 @@ func UpdateCreateTfFileRegistry(publicKey string, region string, amiID string) {
 	availZoneC := (region + "c")
 
 	// Replace the placeholder string with the generated public key path
-	replacedPublicKey := strings.ReplaceAll(string(templateContent), "PUBLIC_KEY_PATH", publicKey)
+	replacedPublicKey := strings.ReplaceAll(string(templateContent), "PUBLIC_KEY", publicKey)
 	replacedRegion := strings.ReplaceAll(string(replacedPublicKey), "AWS_REGION", region)
 	replacedAvailabilityZoneA := strings.ReplaceAll(string(replacedRegion), "AVAILABILITY_ZONE_A", availZoneA)
 	replacedAvailabilityZoneB := strings.ReplaceAll(string(replacedAvailabilityZoneA), "AVAILABILITY_ZONE_B", availZoneB)
 	replacedAvailabilityZoneC := strings.ReplaceAll(string(replacedAvailabilityZoneB), "AVAILABILITY_ZONE_C", availZoneC)
 	updatedFile := strings.ReplaceAll(string(replacedAvailabilityZoneC), "AMI_ID", amiID)
-	err = os.WriteFile("Build_Registry.tf", []byte(updatedFile), 0644)
+	err = os.WriteFile("terraform.tfvars", []byte(updatedFile), 0644)
 	if err != nil {
 		fmt.Println("Cannot write the Terraform config file")
 		return
 	}
 }
 
-func UpdateCreateTfFileCluster(region string) {
+func SetClusterFlagTerraform(flag bool) {
 	// Read the contents of the Terraform template file
 	fmt.Println("Updating and creating the Cluster dependencies file")
-	templateContent, err := os.ReadFile("cluster-dependencies.tf.temp")
+	templateContent, err := os.ReadFile("terraform.tfvars.temp")
 	if err != nil {
 		fmt.Println("Cannot read template file")
 		return
 	}
+	if flag {
 
+		// Replace the placeholder string with the generated public key path
+		replacedClusterFlag := strings.ReplaceAll(string(templateContent), "false", "true")
+		err = os.WriteFile("terraform.tfvars", []byte(replacedClusterFlag), 0644)
+		if err != nil {
+			fmt.Println("Cannot write the Terraform config file")
+			return
+		}
+
+	}
 	// Replace the placeholder string with the generated public key path
-	replacedRegion := strings.ReplaceAll(string(templateContent), "AWS_REGION", region)
-	err = os.WriteFile("Build_Cluster_Dependencies.tf", []byte(replacedRegion), 0644)
+	replacedClusterFlag := strings.ReplaceAll(string(templateContent), "false", "false")
+	err = os.WriteFile("terraform.tfvars", []byte(replacedClusterFlag), 0644)
 	if err != nil {
 		fmt.Println("Cannot write the Terraform config file")
 		return

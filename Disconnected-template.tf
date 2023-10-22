@@ -1,5 +1,5 @@
 provider "aws" {
-  region = "AWS_REGION"
+  region = var.Region
 }
 
 data "aws_region" "current" {}
@@ -18,41 +18,11 @@ resource "aws_vpc" "disconnected-vpc" {
 resource "aws_subnet" "registry-subnet" {
   vpc_id     = aws_vpc.disconnected-vpc.id
   cidr_block = "10.0.0.0/28"
-  availability_zone = "AVAILABILITY_ZONE_A"
+  availability_zone = var.Availability_Zone_A
   map_public_ip_on_launch = true
 
   tags = {
     Name = "registry-subnet"
-  }
-}
-
-resource "aws_subnet" "private-1" {
-  vpc_id     = aws_vpc.disconnected-vpc.id
-  cidr_block = "10.0.0.32/27"
-  availability_zone = "AVAILABILITY_ZONE_A"
-  
-  tags = {
-    Name = "Private-1"
-  }
-}
-
-resource "aws_subnet" "private-2" {
-  vpc_id     = aws_vpc.disconnected-vpc.id
-  cidr_block = "10.0.0.64/27"
-  availability_zone = "AVAILABILITY_ZONE_B"
-
-  tags = {
-    Name = "Private-2"
-  }
-}
-
-resource "aws_subnet" "private-3" {
-  vpc_id     = aws_vpc.disconnected-vpc.id
-  cidr_block = "10.0.0.96/27"
-  availability_zone = "AVAILABILITY_ZONE_C"
-
-  tags = {
-    Name = "Private-3"
   }
 }
 
@@ -119,11 +89,11 @@ resource "random_string" "key_suffix" {
 
 resource "aws_key_pair" "registry-key-pair" {
   key_name   = "registry-key-${random_string.key_suffix.result}"
-  public_key = file("PUBLIC_KEY_PATH")
+  public_key = file(var.Public_Key_Path)
 }
 
 resource "aws_instance" "mirror-registry" {
-  ami           = "AMI_ID"
+  ami           = var.Ami_Id
   instance_type = "c5.xlarge"
   key_name      = aws_key_pair.registry-key-pair.key_name
 
@@ -131,12 +101,12 @@ resource "aws_instance" "mirror-registry" {
   vpc_security_group_ids = [aws_security_group.registry-sg.id]
 
   user_data = templatefile("registry-mirror-script-terraform.tpl", {
-        private_subnet_1 = aws_subnet.private-1.id
-        private_subnet_2 = aws_subnet.private-2.id
-        private_subnet_3 = aws_subnet.private-3.id
+        private_subnet_1 = var.Create_Cluster ? module.Cluster_Dependencies[0].Subnet_1 : "N/A"
+        private_subnet_2 = var.Create_Cluster ? module.Cluster_Dependencies[0].Subnet_2 : "N/A"
+        private_subnet_3 = var.Create_Cluster ? module.Cluster_Dependencies[0].Subnet_3 : "N/A"
         region           = data.aws_region.current.name
-        access_key_id     = aws_iam_access_key.Cluster_deployer_key.id
-        access_key_secret = aws_iam_access_key.Cluster_deployer_key.secret   
+        access_key_id     = var.Create_Cluster ? module.Cluster_Dependencies[0].IAM_User_Access_Key_id : "N/A"
+        access_key_secret = var.Create_Cluster ? module.Cluster_Dependencies[0].IAM_User_Access_key_Secret : "N/A"
   })
   
   root_block_device {
@@ -150,17 +120,33 @@ resource "aws_instance" "mirror-registry" {
 
 }
 
+output Cluster_Number {
+  value = var.Create_Cluster ? 1 : 0
+}
 
 locals {
   registry_public_dns = aws_instance.mirror-registry[*].public_dns
 }
 
-#output "ec2_instance_public_dns" {
- # description = "SSH command to connect to the EC2 instance"
-  #value       = "To connect to the registry run ssh -i <your-private-key> ec2-user@${aws_instance.mirror-registry.public_dns}"
-#}
+output "ec2_instance_public_dns" {
+  description = "SSH command to connect to the EC2 instance"
+  value       = "To connect to the registry run ssh -i <your-private-key> ec2-user@${aws_instance.mirror-registry.public_dns}"
+}
 
 output "wait_for_initialization" {
   description = "Initialization instructions"
   value       = "The registry requires ~ 5 minutes to initialize. It will be ready when you see the READY file under /home/ec2-user/"
 }
+
+module Cluster_Dependencies {
+  source = "./cluster_dependencies"
+  count = var.Create_Cluster ? 1 : 0
+
+  Vpc_ID = aws_vpc.disconnected-vpc.id
+  Child_Availability_Zone_A = var.Availability_Zone_A
+  Child_Availability_Zone_B = var.Availability_Zone_B
+  Child_Availability_Zone_C = var.Availability_Zone_C
+  Child_Region = var.Region
+}
+
+
