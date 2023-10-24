@@ -114,11 +114,7 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 	createPullSecretTemplate(pullSecretPath)
 	// Update the Bash Script with the provided information from the user.
 	updateBashScript(clusterFlag, clusterVersion)
-	// If cluster flag is used replace the appropriate values in cluster dependencies terraform file
-	if clusterFlag {
-		SetClusterFlagTerraform(clusterFlag)
-	}
-	// Set the Flag to false
+	// If cluster flag is used set it to true else set to false in terraform.tfstate file and created it.
 	SetClusterFlagTerraform(clusterFlag)
 	// Replace the appropriate values in registry template terraform file
 	UpdateCreateTfFileRegistry(publicKeyPath, region, region_ami)
@@ -277,22 +273,24 @@ func SetClusterFlagTerraform(flag bool) {
 		return
 	}
 	if flag {
-
+		flag_string := "true"
 		// Replace the placeholder string with the generated public key path
-		replacedClusterFlag := strings.ReplaceAll(string(templateContent), "false", "true")
+		replacedClusterFlag := strings.ReplaceAll(string(templateContent), "false", flag_string)
 		err = os.WriteFile("terraform.tfvars", []byte(replacedClusterFlag), 0644)
 		if err != nil {
 			fmt.Println("Cannot write the Terraform config file")
 			return
 		}
 
-	}
-	// Replace the placeholder string with the generated public key path
-	replacedClusterFlag := strings.ReplaceAll(string(templateContent), "false", "false")
-	err = os.WriteFile("terraform.tfvars", []byte(replacedClusterFlag), 0644)
-	if err != nil {
-		fmt.Println("Cannot write the Terraform config file")
-		return
+	} else if !flag {
+		flag_string := "false"
+		// Replace the placeholder string with the generated public key path
+		replacedClusterFlag := strings.ReplaceAll(string(templateContent), "false", flag_string)
+		err = os.WriteFile("terraform.tfvars", []byte(replacedClusterFlag), 0644)
+		if err != nil {
+			fmt.Println("Cannot write the Terraform config file")
+			return
+		}
 	}
 }
 
