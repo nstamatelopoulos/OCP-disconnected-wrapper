@@ -1,0 +1,7 @@
+Region = "AWS_REGION"
+Availability_Zone_A = "AVAILABILITY_ZONE_A"
+Availability_Zone_B = "AVAILABILITY_ZONE_B"
+Availability_Zone_C = "AVAILABILITY_ZONE_C"
+Public_Key_Path = "PUBLIC_KEY"
+Ami_Id = "AMI_ID"
+Create_Cluster = false
