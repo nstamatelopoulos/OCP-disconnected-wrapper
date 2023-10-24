@@ -20,6 +20,8 @@ RANDOM_VALUE=$RANDOM
 
 export AWS_SHARED_CREDENTIALS_FILE=$homedir/.aws/credentials
 
+Cluster_VPC_id=${cluster_VPC_id}
+
 #=================================================================================================
 # Creating/Installing some dependencies
 #=================================================================================================
@@ -282,8 +284,16 @@ then
 
     DOMAIN=disconnected-$RANDOM_VALUE.emea.aws.cee.support
     HOSTED_ZONE_ID=$(aws route53 list-hosted-zones-by-name --dns-name $DOMAIN | jq -r '.HostedZones[0].Id')
-    ELB_ALIAS_TARGET=$(aws elb describe-load-balancers --region ${region}  --load-balancer-names | jq -r '.LoadBalancerDescriptions[0].CanonicalHostedZoneNameID')
-    ELB_DNS_NAME=$(aws elb describe-load-balancers --region ${region}  --load-balancer-names | jq -r '.LoadBalancerDescriptions[0].DNSName')
+    for ((i=0; i<=50; i++)); do
+        VPC_id=$(aws elb describe-load-balancers --region ${region} --load-balancer-names | jq -r ".LoadBalancerDescriptions[$i].VPCId")
+        if [[ "$VPC_id" == "$Cluster_VPC_id" ]]; then
+        ELB_ALIAS_TARGET=$(aws elb describe-load-balancers --region ${region}  --load-balancer-names | jq -r ".LoadBalancerDescriptions[$i].CanonicalHostedZoneNameID")
+        ELB_DNS_NAME=$(aws elb describe-load-balancers --region ${region}  --load-balancer-names | jq -r ".LoadBalancerDescriptions[$i].DNSName")
+        echo "The elb hosted zone ID is: $ELB_ALIAS_TARGET" 
+        echo "The elb DNS name is: "$ELB_DNS_NAME
+        break
+        fi
+    done
     
     echo "The domain of the zone is:" $DOMAIN
     echo "The elb hosted zone ID is: $ELB_ALIAS_TARGET" 

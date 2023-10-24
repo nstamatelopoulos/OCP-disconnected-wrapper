@@ -107,6 +107,7 @@ resource "aws_instance" "mirror-registry" {
         region           = data.aws_region.current.name
         access_key_id     = var.Create_Cluster ? module.Cluster_Dependencies[0].IAM_User_Access_Key_id : "N/A"
         access_key_secret = var.Create_Cluster ? module.Cluster_Dependencies[0].IAM_User_Access_key_Secret : "N/A"
+        cluster_VPC_id    = aws_vpc.disconnected-vpc.id
   })
   
   root_block_device {
