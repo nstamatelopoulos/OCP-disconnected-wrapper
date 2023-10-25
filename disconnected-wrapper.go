@@ -12,8 +12,6 @@ import (
 )
 
 const (
-	// cluster_TF             = "./Build_Cluster_Dependencies.tf"
-	// registry_TF            = "./Build_Registry.tf"
 	registryScriptTemplate = "./registry-mirror-script-terraform.sh.temp"
 	registryScript         = "./registry-mirror-script-terraform.tpl"
 	pullSecretTemplate     = "./pull-secret.template"
