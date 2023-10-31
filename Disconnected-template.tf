@@ -121,10 +121,6 @@ resource "aws_instance" "mirror-registry" {
 
 }
 
-output Cluster_Number {
-  value = var.Create_Cluster ? 1 : 0
-}
-
 locals {
   registry_public_dns = aws_instance.mirror-registry[*].public_dns
 }
