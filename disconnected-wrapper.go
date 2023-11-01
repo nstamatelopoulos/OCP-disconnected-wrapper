@@ -50,12 +50,18 @@ func main() {
 	clusterFlag := flag.Bool("cluster", false, "Create a disconnected cluster. Default value False")
 	clusterVersion := flag.String("cluster-version", "", "Set the prefered cluster version")
 	initFlag := flag.Bool("init", false, "Saving pull-secret and public-key for ease of use")
+	helpFlag := flag.Bool("help", false, "Help")
 
 	flag.Parse()
 
+	consolidatedFlagCheckFunction(*installFlag, *destroyFlag, *region, *clusterFlag, *clusterVersion, *initFlag, *helpFlag)
 	// If init flag is used then start interactive prompt to get the paths
 	if *initFlag {
 		initialization(initFileName)
+	}
+	// If the help flag is used display the flag descriptions
+	if *helpFlag {
+		flagsHelp()
 	}
 
 	// If the install flag is used do appropriate actions for installation
@@ -65,7 +71,6 @@ func main() {
 
 		if _, err := os.Stat(initFileName); os.IsNotExist(err) {
 			fmt.Println("Error: The pull-Secret Path and public-Key Path must be provided. Running init interactive prompt")
-			//getInitData(initFileName)
 			initialization(initFileName)
 		}
 		amiID, found := regions[*region]
@@ -124,7 +129,7 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 	cmd.Run()
 
 	mode := "apply"
-	// Run the terraform command
+	//Run the terraform apply command
 	err := runTerraform(mode)
 	if err != nil {
 		log.Fatalf("Failed to execute terraform apply: %v", err)
@@ -172,8 +177,8 @@ func updateBashScript(private bool, clusterVersion string) {
 			if withCluster != nil {
 				println("Cannot write the cluster variable to the registry script file")
 			}
-			// If the private flag is not true then simply write the file with the default changes
 		}
+		// If the private flag is not true then simply write the file with the default changes
 	} else {
 		withoutCluster := os.WriteFile(registryScript, []byte(addPullSecret), 0644)
 		if withoutCluster != nil {
@@ -182,13 +187,10 @@ func updateBashScript(private bool, clusterVersion string) {
 	}
 }
 
-// To clean up the bash script generated file after successfull deployment of the registry.
-
+// To clean up the bash script, pull secret template and .tfvars generated files after successfull deployment of the registry.
 func deleteGeneratedFiles() {
 	Script := os.Remove(registryScript)
 	PullSecretTemp := os.Remove(pullSecretTemplate)
-	// os.Remove(cluster_TF)
-	// os.Remove(registry_TF)
 	os.Remove("terraform.tfvars")
 
 	if Script != nil || PullSecretTemp != nil {
@@ -234,8 +236,6 @@ func createPullSecretTemplate(pullSecret string) {
 
 func UpdateCreateTfFileRegistry(publicKey string, region string, amiID string) {
 
-	// Where to put the cluster flag?????
-
 	// Read the contents of the Terraform template file
 	fmt.Println("Updating and creating the Registry terraform file")
 	templateContent, err := os.ReadFile("terraform.tfvars")
@@ -272,7 +272,7 @@ func SetClusterFlagTerraform(flag bool) {
 	}
 	if flag {
 		flag_string := "true"
-		// Replace the placeholder string with the generated public key path
+		// Set the cluster flag to true and create the terraform.tfvars file
 		replacedClusterFlag := strings.ReplaceAll(string(templateContent), "false", flag_string)
 		err = os.WriteFile("terraform.tfvars", []byte(replacedClusterFlag), 0644)
 		if err != nil {
@@ -282,7 +282,7 @@ func SetClusterFlagTerraform(flag bool) {
 
 	} else if !flag {
 		flag_string := "false"
-		// Replace the placeholder string with the generated public key path
+		// Set the cluster flag to false and create the terraform.tfvars file
 		replacedClusterFlag := strings.ReplaceAll(string(templateContent), "false", flag_string)
 		err = os.WriteFile("terraform.tfvars", []byte(replacedClusterFlag), 0644)
 		if err != nil {
@@ -292,6 +292,7 @@ func SetClusterFlagTerraform(flag bool) {
 	}
 }
 
+// Ask the user using shell prompt whatever is in question variable and return the input string.
 func interactiveCLIFunction(question string) string {
 	var s string
 	r := bufio.NewReader(os.Stdin)
@@ -344,6 +345,7 @@ func readPathsFromFile(filename string) (pullSecret string, publickey string) {
 	return pullSecretPathCurrent, publicKeyPathCurrent
 }
 
+// The whole process of getting the data and writing in the initData.json file
 func getInitData(filepath string) {
 	// Create a Map to store the paths provided
 	pathMap := make(map[string]string)
