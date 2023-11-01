@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 )
 
@@ -51,13 +50,18 @@ func main() {
 	clusterFlag := flag.Bool("cluster", false, "Create a disconnected cluster. Default value False")
 	clusterVersion := flag.String("cluster-version", "", "Set the prefered cluster version")
 	initFlag := flag.Bool("init", false, "Saving pull-secret and public-key for ease of use")
+	helpFlag := flag.Bool("help", false, "Help")
 
 	flag.Parse()
 
-	ConsolidatedFlagCheckFunction(*installFlag, *destroyFlag, *region, *clusterFlag, *clusterVersion, *initFlag)
+	consolidatedFlagCheckFunction(*installFlag, *destroyFlag, *region, *clusterFlag, *clusterVersion, *initFlag, *helpFlag)
 	// If init flag is used then start interactive prompt to get the paths
 	if *initFlag {
 		initialization(initFileName)
+	}
+	// If the help flag is used display the flag descriptions
+	if *helpFlag {
+		flagsHelp()
 	}
 
 	// If the install flag is used do appropriate actions for installation
@@ -67,7 +71,6 @@ func main() {
 
 		if _, err := os.Stat(initFileName); os.IsNotExist(err) {
 			fmt.Println("Error: The pull-Secret Path and public-Key Path must be provided. Running init interactive prompt")
-			//getInitData(initFileName)
 			initialization(initFileName)
 		}
 		amiID, found := regions[*region]
@@ -126,7 +129,7 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 	cmd.Run()
 
 	mode := "apply"
-	//Run the terraform command
+	//Run the terraform apply command
 	err := runTerraform(mode)
 	if err != nil {
 		log.Fatalf("Failed to execute terraform apply: %v", err)
@@ -174,8 +177,8 @@ func updateBashScript(private bool, clusterVersion string) {
 			if withCluster != nil {
 				println("Cannot write the cluster variable to the registry script file")
 			}
-			// If the private flag is not true then simply write the file with the default changes
 		}
+		// If the private flag is not true then simply write the file with the default changes
 	} else {
 		withoutCluster := os.WriteFile(registryScript, []byte(addPullSecret), 0644)
 		if withoutCluster != nil {
@@ -184,13 +187,10 @@ func updateBashScript(private bool, clusterVersion string) {
 	}
 }
 
-// To clean up the bash script generated file after successfull deployment of the registry.
-
+// To clean up the bash script, pull secret template and .tfvars generated files after successfull deployment of the registry.
 func deleteGeneratedFiles() {
 	Script := os.Remove(registryScript)
 	PullSecretTemp := os.Remove(pullSecretTemplate)
-	// os.Remove(cluster_TF)
-	// os.Remove(registry_TF)
 	os.Remove("terraform.tfvars")
 
 	if Script != nil || PullSecretTemp != nil {
@@ -236,8 +236,6 @@ func createPullSecretTemplate(pullSecret string) {
 
 func UpdateCreateTfFileRegistry(publicKey string, region string, amiID string) {
 
-	// Where to put the cluster flag?????
-
 	// Read the contents of the Terraform template file
 	fmt.Println("Updating and creating the Registry terraform file")
 	templateContent, err := os.ReadFile("terraform.tfvars")
@@ -274,7 +272,7 @@ func SetClusterFlagTerraform(flag bool) {
 	}
 	if flag {
 		flag_string := "true"
-		// Replace the placeholder string with the generated public key path
+		// Set the cluster flag to true and create the terraform.tfvars file
 		replacedClusterFlag := strings.ReplaceAll(string(templateContent), "false", flag_string)
 		err = os.WriteFile("terraform.tfvars", []byte(replacedClusterFlag), 0644)
 		if err != nil {
@@ -284,7 +282,7 @@ func SetClusterFlagTerraform(flag bool) {
 
 	} else if !flag {
 		flag_string := "false"
-		// Replace the placeholder string with the generated public key path
+		// Set the cluster flag to false and create the terraform.tfvars file
 		replacedClusterFlag := strings.ReplaceAll(string(templateContent), "false", flag_string)
 		err = os.WriteFile("terraform.tfvars", []byte(replacedClusterFlag), 0644)
 		if err != nil {
@@ -294,6 +292,7 @@ func SetClusterFlagTerraform(flag bool) {
 	}
 }
 
+// Ask the user using shell prompt whatever is in question variable and return the input string.
 func interactiveCLIFunction(question string) string {
 	var s string
 	r := bufio.NewReader(os.Stdin)
@@ -346,6 +345,7 @@ func readPathsFromFile(filename string) (pullSecret string, publickey string) {
 	return pullSecretPathCurrent, publicKeyPathCurrent
 }
 
+// The whole process of getting the data and writing in the initData.json file
 func getInitData(filepath string) {
 	// Create a Map to store the paths provided
 	pathMap := make(map[string]string)
@@ -382,65 +382,4 @@ func initialization(initFile string) {
 	pullSecretPath, publicKeyPath = readPathsFromFile(initFile)
 	fmt.Printf("Using pull-secret from file: %v\n", pullSecretPath)
 	fmt.Printf("Using public-key from file: %v\n", publicKeyPath)
-}
-
-//-==========================================================
-
-func ConsolidatedFlagCheckFunction(install bool, destroy bool, region string, cluster bool, clusterVersion string, init bool) {
-	singleFlagFunction(install, destroy, region, cluster, clusterVersion, init)
-	installFlagFunction(install, destroy, region, init)
-	clusterFlagFunction(install, destroy, region, cluster, clusterVersion, init)
-	checkRegionString(regions, region)
-	checkClusterVersionString(clusterVersion)
-}
-
-func singleFlagFunction(install bool, destroy bool, region string, cluster bool, clusterVersion string, init bool) {
-
-	if init && ((install || destroy || cluster) || (len(region) != 0 || (len(clusterVersion)) != 0)) {
-		fmt.Println("Init flag cannot be used with any other flag but only alone. Please make sure no other flags are provided")
-		os.Exit(1)
-	} else if destroy && ((install || init || cluster) || (len(region) != 0 || (len(clusterVersion)) != 0)) {
-		fmt.Println("Destroy flag cannot be used with any other flag but only alone. Please make sure no other flags are provided")
-		os.Exit(1)
-	}
-}
-
-func installFlagFunction(install bool, destroy bool, region string, init bool) {
-	if install && (destroy || init) {
-		fmt.Println("Install flag cannot be used with --init or --destroy. Please make sure these flags are not provided")
-		os.Exit(1)
-	} else if install && len(region) == 0 {
-		fmt.Println("Please provide a region for the installation using --region flag")
-		os.Exit(1)
-	}
-}
-
-func clusterFlagFunction(install bool, destroy bool, region string, cluster bool, clusterVersion string, init bool) {
-	if cluster && (!install || len(region) == 0) {
-		fmt.Println("To use --cluster flag you need to also provide --install and --region flag with a valid AWS region (e.g eu-west-1)")
-		os.Exit(1)
-	} else if cluster && install && len(region) >= 0 && len(clusterVersion) == 0 {
-		fmt.Println("When using --cluster flag you need to also use --cluster-version with a valid OCP version (e.g 4.13.11)")
-		os.Exit(1)
-	}
-}
-
-func checkRegionString(regions map[string]string, region string) {
-	_, exists := regions[region]
-	if !exists {
-		fmt.Printf("The region: %s you provided is not a valid AWS region", region)
-		os.Exit(1)
-	}
-}
-
-func checkClusterVersionString(clusterVersion string) {
-	regexPattern := `^4\.(1[0-7]|[0-9])\.(60|[0-5]?[0-9])$`
-	matched, err := regexp.MatchString(regexPattern, clusterVersion)
-	if err != nil {
-		fmt.Println("Error in regular expression:", err)
-	}
-	if !matched {
-		fmt.Printf("The provided cluster version: %s is not valid or out of the limits set in this program", clusterVersion)
-		os.Exit(1)
-	}
 }

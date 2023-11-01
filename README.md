@@ -36,13 +36,12 @@ In case you are not aware you can download your pull-secret from console.redhat.
 
 - Golang install
 Please see how to download and setup Golang to your machine in [Golang Documentation](https://go.dev/doc/install)
-It is not mandatory cause you can use directly the compiled binary of the program.
+It is NOT mandatory cause you can use directly the compiled binary of the program.
 
 # How to use
 
 1) Clone the repository.
-2) Use golang to build "go build terraform-registry-wrapper.go" to create a binary executable OR "go run terraform-registry-wrapper.go" to run the program directly OR 
-use the binary directly
+2) Use the executable file "disconnected-wrapper" with the below flags.
    
 Required flags for launching an installation of the Mirror-Registry:
 - **--install** # Instructs the tool that we are launching an installation.
@@ -65,10 +64,10 @@ Then the openshift-installer will be started to create the cluster.
 
 Examples:
 
-- **terraform-registry-wrapper** **--init** # An interactive shell will ask you for the path of your pull-secret and your public-key.
-- **terraform-registry-wrapper** **--install** **--region** **eu-west-1** # Installing a Mirror-Registy in eu-west-1
-- **terraform-registry-wrapper** **--install** **--region** **--cluster** **--cluster-version 4.12.13** # Installs a Mirror-Registry and a disconnected cluster.
-- **terraform-registry-wrapper** **--destroy** # Destroy the mirror registry.
+- **disconnected-wrapper** **--init** # An interactive shell will ask you for the path of your pull-secret and your public-key.
+- **disconnected-wrapper** **--install** **--region** **eu-west-1** # Installing a Mirror-Registy in eu-west-1
+- **disconnected-wrapper** **--install** **--region** **--cluster** **--cluster-version 4.12.13** # Installs a Mirror-Registry and a disconnected cluster.
+- **disconnected-wrapper** **--destroy** # Destroy the mirror registry.
 
 **Important:** The cluster is not managed by this tool upon creation only the Mirror-Registry is. It is the user responsibility to first destroy the cluster using the openshift-installer prior running **--destroy**.
 This is because if the instance get destroyed prior the cluster the installation directory will get lost so all the resources of the cluster will remain running on AWS and a manual cleanup will be needed that is not the best experience if you ask me. 
