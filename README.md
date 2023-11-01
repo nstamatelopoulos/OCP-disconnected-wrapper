@@ -1,23 +1,33 @@
-# disconnected-registry
-This is a tool to quickly create a mirror registry and a disconnected Openshift cluster for quick reproducers.
+# Disconnected-registry
+This is a tool to quickly create a mirror registry and a disconnected Openshift cluster for quick reproducers regarding OLM, image management and disconnected type of reproducers.
 
-# Additional information
+# Description
 The tool creates the mirror registry using the [mirror-registry](https://docs.openshift.com/container-platform/4.12/installing/disconnected_install/installing-mirroring-creating-registry.html) script.
 Although it makes it much easier as it automatically makes some other actions like the below:
 - Creates an EC2 instance to host the registry on AWS. (VPC,Security,Groups, Gateway, Routing, Certificates, oc-mirror and many more..)
+- If the user creates a cluster it mirrors the images for the specified release generates the install-config.yaml, editing some manifests and finally lunches a fully disconnected installation of OCP.
+
+These tasks can take a desent amount of time to setup and when the need is frequent you get the point how this project started.
+
+# Small Summary of what the tool does:
+
+The user depending the flags used will trigger a series of automated tasks like, Mirror-Registry will get created, it will download the appropriate binaries and mirror all the images for the release you have specified with the **--cluster-version** flag, then will create all required manifests (install-config.yaml and will modify some yaml files inside the manifests dir)
+It does that using the provided pull-secret, public-key and some data from the terraform provissioned infrastructure the cluster is depending on.
+Then the openshift-installer will be started to create the cluster.
 
 # Dependencies
 - Terraform
 - AWS credentials
-- Pull-Secrets
+- Pull-Secret
 - SSH key-pair
-- Optional: Golang installed so to be able to run or compile the program. One can get the binary directly from the repo.
 
 # How to setup
 - Terraform:
+
 Can be installed using the package manager of each distribution (yum, apt etc..)
 
-- AWS credentials (Access Key)
+- AWS credentials (Access Key):
+
 Need to have AWS Credentials in ~/.aws/credentials file to be used from terraform when creating or destroying the infrastructure components.
 This can be set using AWS CLI command "aws configure" or manually add the credentials under ~/.aws/credentials using the below format:
 ~~~
@@ -26,17 +36,14 @@ aws_access_key_id = <key-id>
 aws_secret_access_key = <key-value>
 ~~~
 
-- Pull-Secret and SSH key-pair
+- Pull-Secret and SSH key-pair:
+
 The pull-secret path need to be provided upon running the installation of the registry the first time or by using the --init flag.
 The SSH public key you will provide will be used to login to the registry node after installation.
-An interactive shell with ask for the paths and will save them under the project directory in a file named "initData.json"
+An interactive shell with ask for the paths and will save them under the project directory in a file named "initData.json".
 The --init flag is more usefull to overwrite any credentials in case the pull-secret or the key-pair are lost for example but can be used for any relevant reason.
 
 In case you are not aware you can download your pull-secret from console.redhat.com
-
-- Golang install
-Please see how to download and setup Golang to your machine in [Golang Documentation](https://go.dev/doc/install)
-It is NOT mandatory cause you can use directly the compiled binary of the program.
 
 # How to use
 
@@ -56,11 +63,23 @@ Credentials Initialization flag:
 - **--init** # This flag i used to overwrite any credentials in case the pull-secret or the key-pair are lost or need to be changed.
 It saves them under the project directory in a file named "initData.json"
 
-Small Summary of what the tool does:
+Help flag:
+- **--help** # It prints all flags and their descriptions.
 
-The user depending the flags used will trigger a series of automated tasks like, Mirror-Registry will get created, it will download the appropriate binaries and mirror all the images for the release you have specified with the **--cluster-version** flag, then will create all required manifests (install-config.yaml and will modify some yaml files inside the manifests dir)
-It does that using the provided pull-secret, public-key and some data from the terraform provissioned infrastructure the cluster is depending on.
-Then the openshift-installer will be started to create the cluster.
+Additional information for the usage:
+
+- There is a bash script for setting up the mirror-registry and the cluster (IF requested) that will be run after the creation of the registry host inside it as a terraform "user-data" script. This means that the mirror registry EC2 instance will need some time after creation to get initialized ~ 5 minutes and another ~30 minutes if a cluster is requested to finish installation.
+- When the installation starts it will use terraform to create what it was told to by the flags and when terraform finishes will output the command to use to connect to the mirror-registry. For example:
+~~~
+ec2_instance_public_dns = "To connect to the registry run ssh -i <your-private-key> ec2-user@<public-EC2-DNS>.<region>.compute.amazonaws.com"
+wait_for_initialization = "The registry requires ~ 5 minutes to initialize. It will be ready when you see the READY file under /home/ec2-user/"
+~~~
+So the user can login in the registry and check the progress of the deployment.
+In case of only mirror-registry deployment after 5 minutes there will be a file called READY under the home folder of the ec2-user as mentioned in the output.
+In either case IF the installation takes too long the user can check the script execution progress or check for any errors for troubleshooting purposes by running the below command:
+~~~
+$ tail -f /var/log/cloud-init-output.log
+~~~
 
 Examples:
 

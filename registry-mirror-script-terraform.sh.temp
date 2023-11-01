@@ -255,7 +255,7 @@ then
 
    echo "Creating manifests"
    cp install-config.yaml install-config.yaml.bak
-   runuser -u ec2-user -- ./openshift-install create manifests --dir ./
+   runuser -u ec2-user -- openshift-install create manifests --dir ./
 
    echo "Changing the DNS cluster manifest to avoid ingress operator try to add "*.apps" domain"
    cd $homedir/cluster/manifests
@@ -267,7 +267,7 @@ then
 #===========================================================================================================
    echo "Launch cluster installation"
    cd $homedir/cluster
-   runuser -u ec2-user -- ./openshift-install create cluster --dir ./ --log-level=info &
+   runuser -u ec2-user -- openshift-install create cluster --dir ./ --log-level=info &
 
 #===========================================================================================================
 # Adding manually *apps. domain using aws CLI
@@ -322,5 +322,10 @@ then
 
 fi
 
+echo "Allow SSH access from registry to the cluster nodes"
+
+INSTANCE_NAME=$(cat terraform.tfvars.json | jq -r '.cluster_id + "-master-0"')
+SG_GROUP_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=${INSTANCE_NAME}" --query "Reservations[*].Instances[*].InstanceId" --output text)
+aws ec2 authorize-security-group-ingress --group-id ${SG_GROUP_ID} --protocol tcp --port 22 --cidr 0.0.0.0/0
 
 
