@@ -324,16 +324,22 @@ then
 
 fi
 
+#===========================================================================================================
+# Allow in node SG Groups access from the registry using SSH
+#===========================================================================================================
+
 echo "Allow SSH access from registry to the cluster nodes"
+
+VPC_ID=$(jq -r '.outputs.vpc_id.value' terraform.cluster.tfstate)
 
 # Master-nodes
 
-SG_GROUP_NAME=$(cat terraform.tfvars.json | jq -r '.cluster_id + "-worker-sg"')
+SG_GROUP_NAME=$(jq -r '.cluster_id + "-master-sg"' terraform.tfvars.json)
 SG_GROUP_ID=$(aws ec2 describe-security-groups --filters Name=vpc-id,Values=$VPC_ID --filters Name=tag:Name,Values=$SG_GROUP_NAME | jq -r '.SecurityGroups[0].GroupId')
 aws ec2 authorize-security-group-ingress --group-id $SG_GROUP_ID --protocol tcp --port 22 --cidr 0.0.0.0/0
 
 # Worker_nodes
 
-SG_GROUP_NAME=$(cat terraform.tfvars.json | jq -r '.cluster_id + "-master-sg"')
+SG_GROUP_NAME=$(jq -r '.cluster_id + "-worker-sg"' terraform.tfvars.json)
 SG_GROUP_ID=$(aws ec2 describe-security-groups --filters Name=vpc-id,Values=$VPC_ID --filters Name=tag:Name,Values=$SG_GROUP_NAME | jq -r '.SecurityGroups[0].GroupId')
 aws ec2 authorize-security-group-ingress --group-id $SG_GROUP_ID --protocol tcp --port 22 --cidr 0.0.0.0/0
