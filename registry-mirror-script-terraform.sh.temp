@@ -197,9 +197,11 @@ echo "Adding the CA to the install-config.yaml"
 echo "additionalTrustBundle:  |" >> $homedir/cluster/install-config.yaml
 echo "$(cat $homedir/registry-stuff/quay-rootCA/rootCA.pem)" | sed 's/^/      /' >> $homedir/cluster/install-config.yaml
 
-echo "Adding the public-key to the install-config.yaml"
+echo "Creating and adding the public-key to the install-config.yaml"
 
-echo "sshKey: $(cat $homedir/.ssh/authorized_keys)" >> $homedir/cluster/install-config.yaml
+ssh-keygen -f $homedir/.ssh/cluster_key -t rsa -q -N ""
+
+echo "sshKey: $(cat $homedir/.ssh/cluster_key.pub)" >> $homedir/cluster/install-config.yaml
 
 echo "Adding pull-secret to the install-config.yaml"
 
