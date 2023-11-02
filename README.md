@@ -64,6 +64,23 @@ It saves them under the project directory in a file named "initData.json"
 Help flag:
 - **--help** # It prints all flags and their descriptions.
 
+# Examples:
+
+- **disconnected-wrapper** **--init** # An interactive shell will ask you for the path of your pull-secret and your public-key. **Use absolute paths**
+- **disconnected-wrapper** **--install** **--region** **eu-west-1** # Installing a Mirror-Registy in eu-west-1
+- **disconnected-wrapper** **--install** **--region** **eu-west-1** **--cluster** **--cluster-version 4.12.13** # Installs a Mirror-Registry and a disconnected cluster in region eu-west-1
+- **disconnected-wrapper** **--destroy** # Destroy the mirror registry.**This does not destroy the cluster IF created. User should first destroy the cluster** 
+To destroy the cluster run the below command in the installation directory that is under /home/ec2-user/cluster in the created Registry instance:
+
+~~~
+$ openshift-install destroy cluster --dir --log-level=info
+~~~
+
+**Important:** The cluster is not managed by this tool upon creation only the Mirror-Registry is. It is the user responsibility to first destroy the cluster using the openshift-installer prior running **--destroy**.
+This is because if the instance get destroyed prior the cluster the installation directory will get lost so all the resources of the cluster will remain running on AWS and a manual cleanup will be needed that is not the best experience if you ask me. 
+For this reason i added an interactive question to ask the user every time **--destroy** flag is used before it destroy the Mirror-Registry. 
+Only with "yes" will destroy.
+
 # Additional information for the usage:
 
 - There is a bash script for setting up the mirror-registry and the cluster (IF requested) that will be run after the creation of the registry host inside it as a terraform "user-data" script. This means that the mirror registry EC2 instance will need some time after creation to get initialized ~ 5 minutes and another ~30 minutes if a cluster is requested to finish installation.
@@ -84,19 +101,6 @@ When the user logs in the registry there are 3 directories:
 - mirroring-workspace # Contains a sample **imageset-config.yaml** file and oc-mirror binary
 - registry-stuff # Its the registry folder as you can imagine from the name. Don't touch this directory except if you know what you are doing.
 - cluster # This is the installation directory of the cluster.
-
-# Examples:
-
-- **disconnected-wrapper** **--init** # An interactive shell will ask you for the path of your pull-secret and your public-key. **Use absolute paths**
-- **disconnected-wrapper** **--install** **--region** **eu-west-1** # Installing a Mirror-Registy in eu-west-1
-- **disconnected-wrapper** **--install** **--region** **eu-west-1** **--cluster** **--cluster-version 4.12.13** # Installs a Mirror-Registry and a disconnected cluster in region eu-west-1
-- **disconnected-wrapper** **--destroy** # Destroy the mirror registry.**This does not destroy the cluster IF created. User should first destroy the cluster** 
-To destroy the cluster run the below command in the installation directory that is under /home/ec2-user/cluster in the created Registry instance.
-
-**Important:** The cluster is not managed by this tool upon creation only the Mirror-Registry is. It is the user responsibility to first destroy the cluster using the openshift-installer prior running **--destroy**.
-This is because if the instance get destroyed prior the cluster the installation directory will get lost so all the resources of the cluster will remain running on AWS and a manual cleanup will be needed that is not the best experience if you ask me. 
-For this reason i added an interactive question to ask the user every time **--destroy** flag is used before it destroy the Mirror-Registry. 
-Only with "yes" will destroy.
 
 **Note:** If one creates any other resources on the created VPC manually post the deployment these need to be deleted prior running the --destroy command, terraform knows only the components that are created during the installation of the mirror-registry. Not managed objects of terraform can cause issues when destroying the VPC.
 
