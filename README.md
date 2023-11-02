@@ -35,7 +35,7 @@ aws_secret_access_key = <key-value>
 - Pull-Secret and SSH key-pair:
 
 The pull-secret path need to be provided upon running the installation of the registry the first time or by using the --init flag.
-The SSH public key you will provide will be used to login to the registry node after installation and will be injected in the cluster nodes if cluster is created.
+The SSH public key you will provide will be used to login to the registry node after installation.
 An interactive shell with ask for the paths and will save them under the project directory in a file named "initData.json".
 The --init flag is more usefull to overwrite any credentials in case the pull-secret or the key-pair are lost for example but can be used for any relevant reason.
 
@@ -64,7 +64,7 @@ It saves them under the project directory in a file named "initData.json"
 Help flag:
 - **--help** # It prints all flags and their descriptions.
 
-Additional information for the usage:
+# Additional information for the usage:
 
 - There is a bash script for setting up the mirror-registry and the cluster (IF requested) that will be run after the creation of the registry host inside it as a terraform "user-data" script. This means that the mirror registry EC2 instance will need some time after creation to get initialized ~ 5 minutes and another ~30 minutes if a cluster is requested to finish installation.
 - When the installation starts it will use terraform to create what it was told to by the flags and when terraform finishes will output the command to use to connect to the mirror-registry. For example:
@@ -79,7 +79,13 @@ In either case IF the installation takes too long the user can check the script 
 $ tail -f /var/log/cloud-init-output.log
 ~~~
 
-Examples:
+When the user logs in the registry there are 3 directories:
+
+- mirroring-workspace # Contains a sample **imageset-config.yaml** file and oc-mirror binary
+- registry-stuff # Its the registry folder as you can imagine from the name. Don't touch this directory except if you know what you are doing.
+- cluster # This is the installation directory of the cluster.
+
+# Examples:
 
 - **disconnected-wrapper** **--init** # An interactive shell will ask you for the path of your pull-secret and your public-key. **Use absolute paths**
 - **disconnected-wrapper** **--install** **--region** **eu-west-1** # Installing a Mirror-Registy in eu-west-1
@@ -93,3 +99,11 @@ For this reason i added an interactive question to ask the user every time **--d
 Only with "yes" will destroy.
 
 **Note:** If one creates any other resources on the created VPC manually post the deployment these need to be deleted prior running the --destroy command, terraform knows only the components that are created during the installation of the mirror-registry. Not managed objects of terraform can cause issues when destroying the VPC.
+
+# Usefull Information
+
+- The cluster directory is under /home/ec2-user/cluster/
+- The cluster SSH key is under /home/ec2-user/.ssh/cluster_key
+- Mirror registry has SSH access to all nodes
+- The kubeconfig of the cluster is under /home/ec2-user/cluster/auth/kubeconfig
+- One can check the installer progress by running tail -f /home/ec2-user/cluster/.openshift-install.log
