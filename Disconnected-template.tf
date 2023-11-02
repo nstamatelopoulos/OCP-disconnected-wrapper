@@ -11,7 +11,7 @@ resource "aws_vpc" "disconnected-vpc" {
   enable_dns_hostnames = true
 
   tags = {
-    Name = "disconnected-vpc"
+    Name = "disconnected-vpc-${random_string.key_suffix.result}"
   }
 }
 
@@ -144,6 +144,7 @@ module Cluster_Dependencies {
   Child_Availability_Zone_B = var.Availability_Zone_B
   Child_Availability_Zone_C = var.Availability_Zone_C
   Child_Region = var.Region
+  Child_Random_Suffix = random_string.key_suffix.result
 }
 
 

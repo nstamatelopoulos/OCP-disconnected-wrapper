@@ -199,7 +199,7 @@ echo "$(cat $homedir/registry-stuff/quay-rootCA/rootCA.pem)" | sed 's/^/      /'
 
 echo "Creating and adding the public-key to the install-config.yaml"
 
-ssh-keygen -f $homedir/.ssh/cluster_key -t rsa -q -N ""
+runuser -u ec2-user -- ssh-keygen -f $homedir/.ssh/cluster_key -t rsa -q -N ""
 
 echo "sshKey: $(cat $homedir/.ssh/cluster_key.pub)" >> $homedir/cluster/install-config.yaml
 
@@ -326,7 +326,14 @@ fi
 
 echo "Allow SSH access from registry to the cluster nodes"
 
-INSTANCE_NAME=$(cat terraform.tfvars.json | jq -r '.cluster_id + "-master-0"')
-INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=$INSTANCE_NAME" --query "Reservations[*].Instances[*].InstanceId" --output text)
-SG_GROUP_ID=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query "Reservations[*].Instances[*].SecurityGroups[*].GroupId" --output text)
+# Master-nodes
+
+SG_GROUP_NAME=$(cat terraform.tfvars.json | jq -r '.cluster_id + "-worker-sg"')
+SG_GROUP_ID=$(aws ec2 describe-security-groups --filters Name=vpc-id,Values=$VPC_ID --filters Name=tag:Name,Values=$SG_GROUP_NAME | jq -r '.SecurityGroups[0].GroupId')
+aws ec2 authorize-security-group-ingress --group-id $SG_GROUP_ID --protocol tcp --port 22 --cidr 0.0.0.0/0
+
+# Worker_nodes
+
+SG_GROUP_NAME=$(cat terraform.tfvars.json | jq -r '.cluster_id + "-master-sg"')
+SG_GROUP_ID=$(aws ec2 describe-security-groups --filters Name=vpc-id,Values=$VPC_ID --filters Name=tag:Name,Values=$SG_GROUP_NAME | jq -r '.SecurityGroups[0].GroupId')
 aws ec2 authorize-security-group-ingress --group-id $SG_GROUP_ID --protocol tcp --port 22 --cidr 0.0.0.0/0

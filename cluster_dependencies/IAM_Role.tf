@@ -3,7 +3,7 @@
 #=====================================================================================================================================
 
 resource "aws_iam_user" "Cluster_deployer" {
-  name = "Cluster_deployer"
+  name = "Cluster_deployer-${var.Child_Random_Suffix}"
 }
 
 resource "aws_iam_access_key" "Cluster_deployer_key" {
