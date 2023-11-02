@@ -81,6 +81,8 @@ This is because if the instance get destroyed prior the cluster the installation
 For this reason i added an interactive question to ask the user every time **--destroy** flag is used before it destroy the Mirror-Registry. 
 Only with "yes" will destroy.
 
+**Note:** If one creates any other resources on the created VPC manually post the deployment these need to be deleted prior running the --destroy command, terraform knows only the components that are created during the installation of the mirror-registry. Not managed objects of terraform can cause issues when destroying the VPC.
+
 # Additional information for the usage:
 
 - There is a bash script for setting up the mirror-registry and the cluster (IF requested) that will be run after the creation of the registry host inside it as a terraform "user-data" script. This means that the mirror registry EC2 instance will need some time after creation to get initialized ~ 5 minutes and another ~30 minutes if a cluster is requested to finish installation.
@@ -101,8 +103,6 @@ When the user logs in the registry there are 3 directories:
 - mirroring-workspace # Contains a sample **imageset-config.yaml** file and oc-mirror binary
 - registry-stuff # Its the registry folder as you can imagine from the name. Don't touch this directory except if you know what you are doing.
 - cluster # This is the installation directory of the cluster.
-
-**Note:** If one creates any other resources on the created VPC manually post the deployment these need to be deleted prior running the --destroy command, terraform knows only the components that are created during the installation of the mirror-registry. Not managed objects of terraform can cause issues when destroying the VPC.
 
 # Usefull Information
 
