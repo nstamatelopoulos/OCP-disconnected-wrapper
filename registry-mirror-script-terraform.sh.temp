@@ -325,7 +325,6 @@ fi
 echo "Allow SSH access from registry to the cluster nodes"
 
 INSTANCE_NAME=$(cat terraform.tfvars.json | jq -r '.cluster_id + "-master-0"')
-SG_GROUP_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=${INSTANCE_NAME}" --query "Reservations[*].Instances[*].InstanceId" --output text)
-aws ec2 authorize-security-group-ingress --group-id ${SG_GROUP_ID} --protocol tcp --port 22 --cidr 0.0.0.0/0
-
-
+INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=$INSTANCE_NAME" --query "Reservations[*].Instances[*].InstanceId" --output text)
+SG_GROUP_ID=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query "Reservations[*].Instances[*].SecurityGroups[*].GroupId" --output text)
+aws ec2 authorize-security-group-ingress --group-id $SG_GROUP_ID --protocol tcp --port 22 --cidr 0.0.0.0/0
