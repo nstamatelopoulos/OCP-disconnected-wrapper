@@ -16,6 +16,7 @@ const (
 	registryScript         = "./registry-mirror-script-terraform.tpl"
 	pullSecretTemplate     = "./pull-secret.template"
 	initFileName           = "initData.json"
+	currentStateFile       = "cluster.txt"
 )
 
 var regions = map[string]string{
@@ -68,7 +69,12 @@ func main() {
 	if *installFlag {
 		// Delete left over templates
 		deleteGeneratedFiles()
-
+		// Check if there is already installed infrastructure before you redeploy.
+		if _, err := os.Stat(currentStateFile); os.IsExist(err) {
+			fmt.Print("You have already installed infrastructure. You need to destroy the current one first before you deploy new one")
+			os.ReadFile(currentStateFile)
+		}
+		// Check if the credentials are present if not ask for them
 		if _, err := os.Stat(initFileName); os.IsNotExist(err) {
 			fmt.Println("Error: The pull-Secret Path and public-Key Path must be provided. Running init interactive prompt")
 			initialization(initFileName)
@@ -140,7 +146,8 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 	if err != nil {
 		log.Fatalf("Failed to execute terraform apply: %v", err)
 	}
-
+	// Create under the local directory a file to monitor if there is already created infrastructure
+	monitorDeploymentState(region, clusterVersion)
 }
 
 func destroyRegistry() {
@@ -152,6 +159,10 @@ func destroyRegistry() {
 		return
 	}
 	deleteGeneratedFiles()
+	deletedClusterTXTerr := os.Remove(currentStateFile)
+	if deletedClusterTXTerr != nil {
+		fmt.Println("Cannot delete the cluster.txt or does not exist")
+	}
 }
 
 // The updateBashScript function is changes the variables of the bash script template and writes it in a new file.
@@ -389,4 +400,22 @@ func initialization(initFile string) {
 	pullSecretPath, publicKeyPath = readPathsFromFile(initFile)
 	fmt.Printf("Using pull-secret from file: %v\n", pullSecretPath)
 	fmt.Printf("Using public-key from file: %v\n", publicKeyPath)
+}
+
+func monitorDeploymentState(region string, clusterVersion string) {
+	if len(clusterVersion) > 0 {
+		clusterInfo := "Already installed mirror registry and cluster in region:" + region + " " + "in version:" + clusterVersion
+		err := os.WriteFile(currentStateFile, []byte(clusterInfo), 0644)
+		if err != nil {
+			fmt.Println("Cannot write the cluster.txt file")
+			return
+		}
+	} else {
+		registryInfo := "Already installed mirror registry in region:" + region + "."
+		err := os.WriteFile(currentStateFile, []byte(registryInfo), 0644)
+		if err != nil {
+			fmt.Println("Cannot write the cluster.txt file")
+			return
+		}
+	}
 }
