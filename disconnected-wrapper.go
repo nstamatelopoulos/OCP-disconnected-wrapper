@@ -47,14 +47,14 @@ func main() {
 	region := flag.String("region", "", "Set the AWS region")
 	installFlag := flag.Bool("install", false, "Install Registry")
 	destroyFlag := flag.Bool("destroy", false, "Destroy Registry")
-	clusterFlag := flag.Bool("cluster", false, "Create a disconnected cluster. Default value False")
 	clusterVersion := flag.String("cluster-version", "", "Set the prefered cluster version")
 	initFlag := flag.Bool("init", false, "Saving pull-secret and public-key for ease of use")
 	helpFlag := flag.Bool("help", false, "Help")
 
 	flag.Parse()
 
-	consolidatedFlagCheckFunction(*installFlag, *destroyFlag, *region, *clusterFlag, *clusterVersion, *initFlag, *helpFlag)
+	consolidatedFlagCheckFunction(*installFlag, *destroyFlag, *region, *clusterVersion, *initFlag, *helpFlag)
+
 	// If init flag is used then start interactive prompt to get the paths
 	if *initFlag {
 		initialization(initFileName)
@@ -79,7 +79,13 @@ func main() {
 			return
 		}
 		pullSecretPath, publicKeyPath = readPathsFromFile(initFileName)
-		installRegistry(*clusterFlag, pullSecretPath, publicKeyPath, *region, amiID, *clusterVersion)
+		if len(*clusterVersion) > 0 {
+			clusterFlag := true
+			installRegistry(clusterFlag, pullSecretPath, publicKeyPath, *region, amiID, *clusterVersion)
+		} else {
+			clusterFlag := false
+			installRegistry(clusterFlag, pullSecretPath, publicKeyPath, *region, amiID, *clusterVersion)
+		}
 
 		// If destroy flag is used destroy all
 	} else if *destroyFlag {
@@ -122,18 +128,19 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 	// Replace the appropriate values in registry template terraform file
 	UpdateCreateTfFileRegistry(publicKeyPath, region, region_ami)
 
-	cmd := exec.Command("terraform", "init")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	// cmd := exec.Command("terraform", "init")
+	// cmd.Stdout = os.Stdout
+	// cmd.Stderr = os.Stderr
 
-	cmd.Run()
+	// cmd.Run()
 
-	mode := "apply"
-	//Run the terraform apply command
-	err := runTerraform(mode)
-	if err != nil {
-		log.Fatalf("Failed to execute terraform apply: %v", err)
-	}
+	// mode := "apply"
+	// //Run the terraform apply command
+	// err := runTerraform(mode)
+	// if err != nil {
+	// 	log.Fatalf("Failed to execute terraform apply: %v", err)
+	// }
+
 }
 
 func destroyRegistry() {

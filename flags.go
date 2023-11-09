@@ -6,27 +6,27 @@ import (
 	"regexp"
 )
 
-func consolidatedFlagCheckFunction(install bool, destroy bool, region string, cluster bool, clusterVersion string, init bool, helpflag bool) {
-	singleFlagFunction(install, destroy, region, cluster, clusterVersion, init, helpflag)
+func consolidatedFlagCheckFunction(install bool, destroy bool, region string, clusterVersion string, init bool, helpflag bool) {
+	singleFlagFunction(install, destroy, region, clusterVersion, init, helpflag)
 	installFlagFunction(install, destroy, region, init)
-	clusterFlagFunction(install, destroy, region, cluster, clusterVersion, init)
+	//clusterFlagFunction(install, destroy, region, clusterVersion, init)
 	if install && (len(region) >= 0) {
 		checkRegionString(regions, region)
 	}
-	if cluster && (len(clusterVersion) >= 0) {
+	if len(clusterVersion) > 0 {
 		checkClusterVersionString(clusterVersion)
 	}
 }
 
-func singleFlagFunction(install bool, destroy bool, region string, cluster bool, clusterVersion string, init bool, helpflag bool) {
+func singleFlagFunction(install bool, destroy bool, region string, clusterVersion string, init bool, helpflag bool) {
 
-	if init && ((install || destroy || cluster || helpflag) || (len(region) != 0 || (len(clusterVersion)) != 0)) {
+	if init && ((install || destroy || helpflag) || (len(region) != 0 || (len(clusterVersion)) != 0)) {
 		fmt.Println("Init flag cannot be used with any other flag but only alone. Please make sure no other flags are provided")
 		os.Exit(1)
-	} else if destroy && ((install || init || cluster || helpflag) || (len(region) != 0 || (len(clusterVersion)) != 0)) {
+	} else if destroy && ((install || init || helpflag) || (len(region) != 0 || (len(clusterVersion)) != 0)) {
 		fmt.Println("Destroy flag cannot be used with any other flag but only alone. Please make sure no other flags are provided")
 		os.Exit(1)
-	} else if helpflag && ((install || init || cluster || destroy) || (len(region) != 0 || (len(clusterVersion)) != 0)) {
+	} else if helpflag && ((install || init || destroy) || (len(region) != 0 || (len(clusterVersion)) != 0)) {
 		fmt.Println("Help flag cannot be used with any other flag but only alone. Please make sure no other flags are provided")
 	}
 }
@@ -37,16 +37,6 @@ func installFlagFunction(install bool, destroy bool, region string, init bool) {
 		os.Exit(1)
 	} else if install && len(region) == 0 {
 		fmt.Println("Please provide a region for the installation using --region flag")
-		os.Exit(1)
-	}
-}
-
-func clusterFlagFunction(install bool, destroy bool, region string, cluster bool, clusterVersion string, init bool) {
-	if cluster && (!install || len(region) == 0) {
-		fmt.Println("To use --cluster flag you need to also provide --install and --region flag with a valid AWS region (e.g eu-west-1)")
-		os.Exit(1)
-	} else if cluster && install && len(region) >= 0 && len(clusterVersion) == 0 {
-		fmt.Println("When using --cluster flag you need to also use --cluster-version with a valid OCP version (e.g 4.13.11)")
 		os.Exit(1)
 	}
 }
