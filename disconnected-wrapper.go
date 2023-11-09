@@ -67,6 +67,7 @@ func main() {
 
 	// If the install flag is used do appropriate actions for installation
 	if *installFlag {
+		checkDeploymentState()
 		// Delete left over templates
 		deleteGeneratedFiles()
 		// Check if there is already installed infrastructure before you redeploy.
@@ -147,7 +148,8 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 		log.Fatalf("Failed to execute terraform apply: %v", err)
 	}
 	// Create under the local directory a file to monitor if there is already created infrastructure
-	monitorDeploymentState(region, clusterVersion)
+	//monitorDeploymentState(region, clusterVersion)
+
 }
 
 func destroyRegistry() {
@@ -159,10 +161,6 @@ func destroyRegistry() {
 		return
 	}
 	deleteGeneratedFiles()
-	deletedClusterTXTerr := os.Remove(currentStateFile)
-	if deletedClusterTXTerr != nil {
-		fmt.Println("Cannot delete the cluster.txt or does not exist")
-	}
 }
 
 // The updateBashScript function is changes the variables of the bash script template and writes it in a new file.
@@ -402,20 +400,58 @@ func initialization(initFile string) {
 	fmt.Printf("Using public-key from file: %v\n", publicKeyPath)
 }
 
-func monitorDeploymentState(region string, clusterVersion string) {
-	if len(clusterVersion) > 0 {
-		clusterInfo := "Already installed mirror registry and cluster in region:" + region + " " + "in version:" + clusterVersion
-		err := os.WriteFile(currentStateFile, []byte(clusterInfo), 0644)
-		if err != nil {
-			fmt.Println("Cannot write the cluster.txt file")
-			return
-		}
-	} else {
-		registryInfo := "Already installed mirror registry in region:" + region + "."
-		err := os.WriteFile(currentStateFile, []byte(registryInfo), 0644)
-		if err != nil {
-			fmt.Println("Cannot write the cluster.txt file")
-			return
+func checkDeploymentState() {
+	// Read the JSON file
+	jsonData, err := os.ReadFile("./terraform.tfstate")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Unmarshal the JSON into an empty interface (map[string]interface{})
+	var data map[string]interface{}
+	if err := json.Unmarshal(jsonData, &data); err != nil {
+		log.Fatal(err)
+	}
+
+	// Check if "resources" key exists
+	resources, resourcesExist := data["resources"].([]interface{})
+	if !resourcesExist {
+		log.Fatal("Error: 'resources' key is missing or not an array")
+	}
+
+	// Search for "aws_instance" type
+	awsInstanceExists := false
+	for _, resource := range resources {
+		if res, ok := resource.(map[string]interface{}); ok {
+			if resType, typeExist := res["type"].(string); typeExist && resType == "aws_instance" {
+				awsInstanceExists = true
+				break
+			}
 		}
 	}
+
+	// Search for "aws_iam_user" type
+	awsUserExists := false
+	for _, resource := range resources {
+		if res, ok := resource.(map[string]interface{}); ok {
+			if resType, typeExist := res["type"].(string); typeExist && resType == "aws_iam_user" {
+				awsUserExists = true
+				break
+			}
+		}
+	}
+
+	// Check if the resources are missing.
+	if awsInstanceExists {
+		fmt.Println("There is already infrastructure present. You cannot deploy new infrastructure before destroy the current one")
+		clusterInfo := "Already installed mirror registry and cluster"
+		fmt.Println(clusterInfo)
+		os.Exit(1)
+	} else if awsUserExists {
+		fmt.Println("There is already infrastructure present. You cannot deploy new infrastructure before destroy the current one")
+		clusterInfo := "Already installed mirror registry"
+		fmt.Println(clusterInfo)
+		os.Exit(1)
+	}
+
 }
