@@ -128,18 +128,18 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 	// Replace the appropriate values in registry template terraform file
 	UpdateCreateTfFileRegistry(publicKeyPath, region, region_ami)
 
-	// cmd := exec.Command("terraform", "init")
-	// cmd.Stdout = os.Stdout
-	// cmd.Stderr = os.Stderr
+	cmd := exec.Command("terraform", "init")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
-	// cmd.Run()
+	cmd.Run()
 
-	// mode := "apply"
-	// //Run the terraform apply command
-	// err := runTerraform(mode)
-	// if err != nil {
-	// 	log.Fatalf("Failed to execute terraform apply: %v", err)
-	// }
+	mode := "apply"
+	//Run the terraform apply command
+	err := runTerraform(mode)
+	if err != nil {
+		log.Fatalf("Failed to execute terraform apply: %v", err)
+	}
 
 }
 
