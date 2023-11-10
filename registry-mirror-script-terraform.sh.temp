@@ -96,6 +96,8 @@ tar -xf $homedir/mirroring-workspace/oc-mirror.tar.gz -C $homedir/mirroring-work
 
 chmod +x $homedir/mirroring-workspace/oc-mirror
 
+mv ./oc-mirror /usr/local/bin
+
 echo "Adding the rootCA to the host so registry to be trusted"
 
 sudo cp $homedir/registry-stuff/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/

@@ -9,3 +9,4 @@ Disconnected.tf
 .vscode/
 terraform
 initData.json
+bin/

@@ -53,9 +53,9 @@ Required flags for launching an installation of the Mirror-Registry:
 Required flags for launching an installation of the Mirror-Registry AND a fully disconnected OCP cluster.
 - **--install** # Instructs the tool that we are launching an installation.
 - **--region** # Here we set the region we like to install the Mirror-Registry. All regions available in the AWS shared account are supported. (examples: eu-west-1,
-- **--cluster** # With this flag we instruct the program that we will need to install both the registry and a disconnected OCP cluster. 
-This flag is required to be provided with the below flag **--cluster-version**. Wont work without. A flag policy is also added so if you did something wrong you will get a relevant message that indicate the problem. If you find any scenario that i missed to cover please inform me to fix it.
-- **--cluster-version** # With this flag we specify the exact version of the cluster we like to install (examples: 4.12.13, 4.13.11 etc..)
+- **--cluster-version** # With this flag we tell the program that we need a cluster and the exact version of the cluster (examples: 4.12.13, 4.13.11 etc..)
+
+A flag policy is also added so if you did something wrong you will get a relevant message that indicate the problem. If you find any scenario that i missed to cover please inform me to fix it.
 
 Credentials Initialization flag:
 - **--init** # This flag i used to overwrite any credentials in case the pull-secret or the key-pair are lost or need to be changed.
@@ -68,7 +68,7 @@ Help flag:
 
 - **disconnected-wrapper** **--init** # An interactive shell will ask you for the path of your pull-secret and your public-key. **Use absolute paths**
 - **disconnected-wrapper** **--install** **--region** **eu-west-1** # Installing a Mirror-Registy in eu-west-1
-- **disconnected-wrapper** **--install** **--region** **eu-west-1** **--cluster** **--cluster-version 4.12.13** # Installs a Mirror-Registry and a disconnected cluster in region eu-west-1
+- **disconnected-wrapper** **--install** **--region** **eu-west-1** **--cluster-version 4.12.13** # Installs a Mirror-Registry and a disconnected cluster of version 4.12.13 in region eu-west-1
 - **disconnected-wrapper** **--destroy** # Destroy the mirror registry.**This does not destroy the cluster IF created. User should first destroy the cluster** 
 To destroy the cluster run the below command in the installation directory that is under /home/ec2-user/cluster in the created Registry instance:
 
@@ -92,7 +92,7 @@ ec2_instance_public_dns = "To connect to the registry run ssh -i <your-private-k
 wait_for_initialization = "The registry requires ~ 5 minutes to initialize. It will be ready when you see the READY file under /home/ec2-user/"
 ~~~
 So the user can login in the registry and check the progress of the deployment.
-In case of only mirror-registry deployment after 5 minutes there will be a file called READY under the home folder of the ec2-user as mentioned in the output.
+In case of only mirror-registry deployment after 5 minutes there will be a file named READY under the home folder of the ec2-user as mentioned in the output.
 In either case IF the installation takes too long the user can check the script execution progress or check for any errors for troubleshooting purposes by running the below command:
 ~~~
 $ tail -f /var/log/cloud-init-output.log
@@ -100,7 +100,7 @@ $ tail -f /var/log/cloud-init-output.log
 
 When the user logs in the registry there are 3 directories:
 
-- mirroring-workspace # Contains a sample **imageset-config.yaml** file and oc-mirror binary
+- mirroring-workspace # Contains a sample **imageset-config.yaml** file and oc-mirror binary is already in the PATH. If you have created a cluster this imageset-config.yaml file will have the selected release channel and version. If you want to mirror any operators you need to add the "operators" section below and don't touch this section or touch it if you know what you are doing. The reason for this is to not accidentally prune the release images.
 - registry-stuff # Its the registry folder as you can imagine from the name. Don't touch this directory except if you know what you are doing.
 - cluster # This is the installation directory of the cluster.
 
