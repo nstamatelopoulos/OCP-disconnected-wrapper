@@ -45,7 +45,7 @@ In case you are not aware you can download your pull-secret from console.redhat.
 
 1) Clone the repository.
 2) Go to the latest release and download the binary that suits your OS. It is supported for both Mac and Linux.
-3) Extract the binary from the downloaded tar file and execute it **inside the cloned directory**. 
+3) Extract the binary from the downloaded tar file and execute it **inside the cloned directory**.
    
 Required flags for launching an installation of the Mirror-Registry:
 - **--install** # Instructs the tool that we are launching an installation.
