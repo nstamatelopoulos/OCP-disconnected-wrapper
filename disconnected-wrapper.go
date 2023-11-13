@@ -67,14 +67,20 @@ func main() {
 
 	// If the install flag is used do appropriate actions for installation
 	if *installFlag {
-		checkDeploymentState()
+
+		// Check if there is already installed infrastructure before you redeploy.
+		if _, err := os.Stat("./terraform.tfstate"); os.IsNotExist(err) {
+			fmt.Println("No terraform.tfstate file detected. The tool is probably run for the first time")
+		} else if err == nil {
+			fmt.Println("The terraform.tfstate file is detected. Checking current state.")
+			checkDeploymentState()
+		} else {
+			fmt.Println("Error:", err)
+		}
+
 		// Delete left over templates
 		deleteGeneratedFiles()
-		// Check if there is already installed infrastructure before you redeploy.
-		if _, err := os.Stat(currentStateFile); os.IsExist(err) {
-			fmt.Print("You have already installed infrastructure. You need to destroy the current one first before you deploy new one")
-			os.ReadFile(currentStateFile)
-		}
+
 		// Check if the credentials are present if not ask for them
 		if _, err := os.Stat(initFileName); os.IsNotExist(err) {
 			fmt.Println("Error: The pull-Secret Path and public-Key Path must be provided. Running init interactive prompt")
@@ -147,8 +153,6 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 	if err != nil {
 		log.Fatalf("Failed to execute terraform apply: %v", err)
 	}
-	// Create under the local directory a file to monitor if there is already created infrastructure
-	//monitorDeploymentState(region, clusterVersion)
 
 }
 
@@ -280,7 +284,7 @@ func UpdateCreateTfFileRegistry(publicKey string, region string, amiID string) {
 
 func SetClusterFlagTerraform(flag bool) {
 	// Read the contents of the Terraform template file
-	fmt.Println("Updating and creating the Cluster dependencies file")
+	fmt.Println("Creating the .tfvars file")
 	templateContent, err := os.ReadFile("terraform.tfvars.temp")
 	if err != nil {
 		fmt.Println("Cannot read template file")
@@ -441,13 +445,13 @@ func checkDeploymentState() {
 		}
 	}
 
-	// Check if the resources are missing.
-	if awsInstanceExists {
+	// Check what resources exist.
+	if awsInstanceExists && awsUserExists {
 		fmt.Println("There is already infrastructure present. You cannot deploy new infrastructure before destroy the current one")
 		clusterInfo := "Already installed mirror registry and cluster"
 		fmt.Println(clusterInfo)
 		os.Exit(1)
-	} else if awsUserExists {
+	} else if awsInstanceExists {
 		fmt.Println("There is already infrastructure present. You cannot deploy new infrastructure before destroy the current one")
 		clusterInfo := "Already installed mirror registry"
 		fmt.Println(clusterInfo)

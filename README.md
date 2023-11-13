@@ -44,7 +44,8 @@ In case you are not aware you can download your pull-secret from console.redhat.
 # How to use
 
 1) Clone the repository.
-2) Use the executable file "disconnected-wrapper" with the below flags.
+2) Go to the latest release and download the binary that suits your OS. It is supported for both Mac and Linux.
+3) Extract the binary from the downloaded tar file and execute it **inside the cloned directory**. 
    
 Required flags for launching an installation of the Mirror-Registry:
 - **--install** # Instructs the tool that we are launching an installation.
@@ -66,10 +67,10 @@ Help flag:
 
 # Examples:
 
-- **disconnected-wrapper** **--init** # An interactive shell will ask you for the path of your pull-secret and your public-key. **Use absolute paths**
-- **disconnected-wrapper** **--install** **--region** **eu-west-1** # Installing a Mirror-Registy in eu-west-1
-- **disconnected-wrapper** **--install** **--region** **eu-west-1** **--cluster-version 4.12.13** # Installs a Mirror-Registry and a disconnected cluster of version 4.12.13 in region eu-west-1
-- **disconnected-wrapper** **--destroy** # Destroy the mirror registry.**This does not destroy the cluster IF created. User should first destroy the cluster** 
+- **ocpd** **--init** # An interactive shell will ask you for the path of your pull-secret and your public-key. **Use absolute paths**
+- **ocpd** **--install** **--region** **eu-west-1** # Installing a Mirror-Registy in eu-west-1
+- **ocpd** **--install** **--region** **eu-west-1** **--cluster-version 4.12.13** # Installs a Mirror-Registry and a disconnected cluster of version 4.12.13 in region eu-west-1
+- **ocpd** **--destroy** # Destroy the mirror registry.**This does not destroy the cluster IF created. User should first destroy the cluster** 
 To destroy the cluster run the below command in the installation directory that is under /home/ec2-user/cluster in the created Registry instance:
 
 ~~~
