@@ -55,7 +55,7 @@ func main() {
 
 	flag.Parse()
 
-	consolidatedFlagCheckFunction(*installFlag, *destroyFlag, *region, *clusterVersion, *initFlag, *helpFlag)
+	consolidatedFlagCheckFunction(*installFlag, *destroyFlag, *region, *clusterVersion, *initFlag, *helpFlag, *openshiftCNI)
 
 	// If init flag is used then start interactive prompt to get the paths
 	if *initFlag {
