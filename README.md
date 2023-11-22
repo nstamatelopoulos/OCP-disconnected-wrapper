@@ -74,7 +74,7 @@ Help flag:
 To destroy the cluster run the below command in the installation directory that is under /home/ec2-user/cluster in the created Registry instance:
 
 ~~~
-$ openshift-install destroy cluster --dir --log-level=info
+$ openshift-install destroy cluster --dir . --log-level=info
 ~~~
 
 **Important:** The cluster is not managed by this tool upon creation only the Mirror-Registry is. It is the user responsibility to first destroy the cluster using the openshift-installer prior running **--destroy**.
