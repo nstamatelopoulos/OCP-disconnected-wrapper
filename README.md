@@ -57,6 +57,7 @@ Required flags for launching an installation of the Mirror-Registry AND a fully 
 - **--install** # Instructs the tool that we are launching an installation.
 - **--region** # Here we set the region we like to install the Mirror-Registry. All regions available in the AWS shared account are supported. (examples: eu-west-1,
 - **--cluster-version** # With this flag we tell the program that we need a cluster and the exact version of the cluster (examples: 4.12.13, 4.13.11 etc..)
+- **--sdn** # With this flag one can install the cluster with the OpenshiftSDN CNI. If the flag is not defined the cluster will install using OVN-Kubernetes
 
 A flag policy is also added so if you did something wrong you will get a relevant message that indicate the problem. If you find any scenario that i missed to cover please inform me to fix it.
 
@@ -71,7 +72,7 @@ Help flag:
 
 - **ocpd** **--init** # An interactive shell will ask you for the path of your pull-secret and your public-key. **Use absolute paths**
 - **ocpd** **--install** **--region** **eu-west-1** # Installing a Mirror-Registy in eu-west-1
-- **ocpd** **--install** **--region** **eu-west-1** **--cluster-version 4.12.13** # Installs a Mirror-Registry and a disconnected cluster of version 4.12.13 in region eu-west-1
+- **ocpd** **--install** **--region** **eu-west-1** **--cluster-version 4.12.13** **--sdn** # Installs a Mirror-Registry and a disconnected cluster of version 4.12.13 in region eu-west-1 wiht SDN CNI
 - **ocpd** **--destroy** # Destroy the mirror registry.**This does not destroy the cluster IF created. User should first destroy the cluster** 
 To destroy the cluster run the below command in the installation directory that is under /home/ec2-user/cluster in the created Registry instance:
 
