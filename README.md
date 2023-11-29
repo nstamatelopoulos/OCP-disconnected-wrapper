@@ -32,6 +32,8 @@ aws_access_key_id = <key-id>
 aws_secret_access_key = <key-value>
 ~~~
 
+For more information on Access Keys and how to create one please visit AWS [documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html#Using_CreateAccessKey)
+
 - Pull-Secret and SSH key-pair:
 
 The pull-secret path need to be provided upon running the installation of the registry the first time or by using the --init flag.
@@ -39,13 +41,13 @@ The SSH public key you will provide will be used to login to the registry node a
 An interactive shell with ask for the paths and will save them under the project directory in a file named "initData.json".
 The --init flag is more usefull to overwrite any credentials in case the pull-secret or the key-pair are lost for example but can be used for any relevant reason.
 
-In case you are not aware you can download your pull-secret from console.redhat.com
+In case you are not aware you can download your pull-secret from Red Hat [console](https://console.redhat.com/openshift/install/pull-secret)
 
 # How to use
 
 1) Clone the repository.
 2) Go to the latest release and download the binary that suits your OS. It is supported for both Mac and Linux.
-3) Extract the binary from the downloaded tar file and execute it **inside the cloned directory**. 
+3) Extract the binary from the downloaded tar file and execute it **inside the cloned directory**.
    
 Required flags for launching an installation of the Mirror-Registry:
 - **--install** # Instructs the tool that we are launching an installation.

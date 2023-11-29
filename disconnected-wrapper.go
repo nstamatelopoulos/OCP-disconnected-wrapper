@@ -50,11 +50,12 @@ func main() {
 	destroyFlag := flag.Bool("destroy", false, "Destroy Registry")
 	clusterVersion := flag.String("cluster-version", "", "Set the prefered cluster version")
 	initFlag := flag.Bool("init", false, "Saving pull-secret and public-key for ease of use")
+	openshiftCNI := flag.Bool("sdn", false, "Use SDN CNI for the cluster instead. OVN is the default")
 	helpFlag := flag.Bool("help", false, "Help")
 
 	flag.Parse()
 
-	consolidatedFlagCheckFunction(*installFlag, *destroyFlag, *region, *clusterVersion, *initFlag, *helpFlag)
+	consolidatedFlagCheckFunction(*installFlag, *destroyFlag, *region, *clusterVersion, *initFlag, *helpFlag, *openshiftCNI)
 
 	// If init flag is used then start interactive prompt to get the paths
 	if *initFlag {
@@ -94,10 +95,10 @@ func main() {
 		pullSecretPath, publicKeyPath = readPathsFromFile(initFileName)
 		if len(*clusterVersion) > 0 {
 			clusterFlag := true
-			installRegistry(clusterFlag, pullSecretPath, publicKeyPath, *region, amiID, *clusterVersion)
+			installRegistry(clusterFlag, pullSecretPath, publicKeyPath, *region, amiID, *clusterVersion, *openshiftCNI)
 		} else {
 			clusterFlag := false
-			installRegistry(clusterFlag, pullSecretPath, publicKeyPath, *region, amiID, *clusterVersion)
+			installRegistry(clusterFlag, pullSecretPath, publicKeyPath, *region, amiID, *clusterVersion, *openshiftCNI)
 		}
 
 		// If destroy flag is used destroy all
@@ -130,12 +131,12 @@ func runTerraform(mode string) error {
 	return nil
 }
 
-func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath string, region string, region_ami string, clusterVersion string) {
+func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath string, region string, region_ami string, clusterVersion string, sdnCNI bool) {
 
 	// Create new PullSecretTemplate
 	createPullSecretTemplate(pullSecretPath)
 	// Update the Bash Script with the provided information from the user.
-	updateBashScript(clusterFlag, clusterVersion)
+	updateBashScript(clusterFlag, clusterVersion, sdnCNI)
 	// If cluster flag is used set it to true else set to false in terraform.tfstate file and created it.
 	SetClusterFlagTerraform(clusterFlag)
 	// Replace the appropriate values in registry template terraform file
@@ -168,7 +169,7 @@ func destroyRegistry() {
 }
 
 // The updateBashScript function is changes the variables of the bash script template and writes it in a new file.
-func updateBashScript(private bool, clusterVersion string) {
+func updateBashScript(private bool, clusterVersion string, sdnCNI bool) {
 	// Set hostname to the mirror-registry
 	pullSecretContent, err := os.ReadFile(pullSecretTemplate)
 	if err != nil {
@@ -180,8 +181,15 @@ func updateBashScript(private bool, clusterVersion string) {
 	if err != nil {
 		println("Cannot read the registry script template file")
 	}
+	// Update the Openshift CNI
+	var addCNI string
+	if sdnCNI {
+		addCNI = strings.ReplaceAll(string(scriptContent), "$CNI", "OpenShiftSDN")
+	} else if !sdnCNI {
+		addCNI = strings.ReplaceAll(string(scriptContent), "$CNI", "OVNKubernetes")
+	}
 	// Update the variables with their value
-	addPullSecret := strings.ReplaceAll(string(scriptContent), "$PULL_SECRET_CONTENT$", pullSecretTemplateAsString)
+	addPullSecret := strings.ReplaceAll(string(addCNI), "$PULL_SECRET_CONTENT$", pullSecretTemplateAsString)
 	// If the private flag is true add the cluster variable in the registry script
 	if private {
 		addClusterFlag := strings.ReplaceAll(addPullSecret, "CREATE_CLUSTER=false", "CREATE_CLUSTER=true")
