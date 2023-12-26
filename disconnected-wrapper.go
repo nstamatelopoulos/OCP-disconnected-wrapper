@@ -228,7 +228,11 @@ func deleteGeneratedFiles() {
 
 // It creates the pull Secret Template from the pull-secret.json provided by the user
 func createPullSecretTemplate(pullSecret string) {
-	// convert the string file to []byte and add it to data variable
+
+	serverToRemove := "cloud.openshift.com"
+	newServer := "REGISTRY-HOSTNAME:8443"
+
+	// Read the content of the pull secret file
 	data, err := os.ReadFile(pullSecret)
 	if err != nil {
 		fmt.Printf("Failed to read the pullSecret file: %v\n", err)
@@ -241,25 +245,39 @@ func createPullSecretTemplate(pullSecret string) {
 		fmt.Printf("Failed to unmarshal JSON data: %v\n", err)
 		return
 	}
-	json.Unmarshal(data, &pullSecretMap)
 
-	// Add the new section under "auths"
-	auths := pullSecretMap["auths"].(map[string]interface{})
+	// Remove the specified server
+	auths, authsExist := pullSecretMap["auths"].(map[string]interface{})
+	if authsExist {
+		delete(auths, serverToRemove)
+	} else {
+		fmt.Println("Error: 'auths' key not found in pull secret.")
+		return
+	}
+
+	// Add the new server
 	newAuth := map[string]interface{}{
 		"auth":  "CREDENTIALS",
 		"email": "registry@example.com",
 	}
-	auths["REGISTRY-HOSTNAME:8443"] = newAuth
+	auths[newServer] = newAuth
 
 	// Convert the updated pullSecretMap back to JSON
-	updatedData, _ := json.MarshalIndent(pullSecretMap, "", "  ")
-
-	// Write the updated JSON data to a separate file
-	error := os.WriteFile(pullSecretTemplate, updatedData, 0644)
-	if error != nil {
-		fmt.Println("Failed to create the pull-secret template file")
+	updatedData, err := json.MarshalIndent(pullSecretMap, "", "  ")
+	if err != nil {
+		fmt.Println("Failed to marshal JSON data:", err)
 		return
 	}
+
+	// Write the updated JSON data to a separate file
+	err = os.WriteFile(pullSecretTemplate, updatedData, 0644)
+	if err != nil {
+		fmt.Println("Failed to create the updated pull-secret template file:", err)
+		return
+	}
+
+	fmt.Println("Pull secret template updated successfully.")
+
 }
 
 func UpdateCreateTfFileRegistry(publicKey string, region string, amiID string) {

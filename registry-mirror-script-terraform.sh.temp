@@ -345,3 +345,12 @@ SG_GROUP_ID=$(aws ec2 describe-security-groups --filters Name=vpc-id,Values=$VPC
 aws ec2 authorize-security-group-ingress --group-id $SG_GROUP_ID --protocol tcp --port 22 --cidr 0.0.0.0/0
 
 fi
+
+#===========================================================================================================
+# Disable default Catalog Sources
+#===========================================================================================================
+
+export KUBECONFIG=$homedir/cluster/auth/kubeconfig
+
+oc patch OperatorHub cluster --type json \
+    -p '[{"op": "add", "path": "/spec/disableAllDefaultSources", "value": true}]'
