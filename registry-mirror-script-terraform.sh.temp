@@ -1,10 +1,10 @@
 #!/bin/bash 
 
-#=================================================================================================
+#==============================
 echo "Creating root directory"
-#=================================================================================================
+#==============================
 # Creating some variables
-#=================================================================================================
+#==============================
 
 homedir=/home/ec2-user
 
@@ -22,9 +22,9 @@ export AWS_SHARED_CREDENTIALS_FILE=$homedir/.aws/credentials
 
 Cluster_VPC_id=${cluster_VPC_id}
 
-#=================================================================================================
+#=======================================
 # Creating/Installing some dependencies
-#=================================================================================================
+#=======================================
 
 mkdir $homedir/registry-stuff && cd $homedir/registry-stuff
 
@@ -39,9 +39,9 @@ curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip
 unzip awscliv2.zip
 sudo ./aws/install
 
-#=================================================================================================
+#============================================
 # Downloading and setting up mirror-registry
-#=================================================================================================
+#============================================
 
 echo "Getting mirror-registry package"
 
@@ -61,9 +61,9 @@ password=$(cat registry-install.log | grep -o 'credentials (init, [^)]*)' | sed 
 
 password_hash=$(echo -n "init:$${password}" | base64 -w0)
 
-#=================================================================================================
+#======================================================================================
 # Creating the global pull-secret for the ec2-user using the init password and hostname
-#=================================================================================================
+#======================================================================================
 
 echo "Create the pull-secret with the credentials and store it under ./docker/config.json"
 
@@ -78,9 +78,9 @@ cp $homedir/pull-secret.template $homedir/.docker/config.json
 sed -i "s/CREDENTIALS/$password_hash/g" $homedir/.docker/config.json
 sed -i "s/REGISTRY-HOSTNAME/$hostname/g" $homedir/.docker/config.json
 
-#=================================================================================================
+#=================================================================================
 # Creating the filesystem required, Downloading oc-mirror and fixing the CA trust.
-#=================================================================================================
+#=================================================================================
 
 echo "Create oc-mirror and cluster workspace directory"
 
@@ -106,9 +106,9 @@ sudo update-ca-trust
 
 echo "Create the imageset-config.yaml and install-config.yaml template file"
 
-#=================================================================================================
+#===============================================================
 # Creating/Building imageset-config.yaml and install-config.yaml
-#=================================================================================================
+#===============================================================
 
 cat <<EOF > "$homedir/mirroring-workspace/imageset-config.yaml"
 apiVersion: mirror.openshift.io/v1alpha2
@@ -176,9 +176,9 @@ echo "Fixing directory permissions"
 chown -R ec2-user:ec2-user $homedir/mirroring-workspace/
 chown -R ec2-user:ec2-user $homedir/cluster
 
-#=================================================================================================
+#===============================================================================================
 # Creating the .aws/Credentials file with the static credentials from the cluster deployer user
-#=================================================================================================
+#===============================================================================================
 
 mkdir $homedir/.aws
 
@@ -190,9 +190,9 @@ EOF
 
 chown -R ec2-user:ec2-user $homedir/.aws/
 
-#=================================================================================================
+#=================================
 # Creating the install-config.yaml
-#=================================================================================================
+#=================================
 
 echo "Adding the CA to the install-config.yaml"
 
@@ -214,9 +214,9 @@ echo "Cleanup the workspace"
 rm $homedir/mirroring-workspace/oc-mirror.tar.gz
 rm $homedir/pull-secret.template
 
-#=================================================================================================
+#===========================================================
 # Let the user know that the mirror registry is ready to use
-#=================================================================================================
+#===========================================================
 
 echo "Registry is ready to mirror"
 
@@ -224,9 +224,9 @@ cat <<EOF > "$homedir/READY"
 The registry was initialized successfully!
 EOF
 
-#=================================================================================================
+#=============================================================================================
 # If the user selected to create a cluster along with the Registry do the appropriate actions.
-#=================================================================================================
+#=============================================================================================
 
 if [ "$CREATE_CLUSTER" = "true" ]
 then
@@ -266,23 +266,23 @@ then
    sed '/baseDomain:/q' cluster-dns-02-config.yml > new-cluster-dns-02-config.yml && mv new-cluster-dns-02-config.yml cluster-dns-02-config.yml
    chown -R ec2-user:ec2-user $homedir/cluster
 
-#===========================================================================================================
+#============================
 # Launch cluster installation
-#===========================================================================================================
+#============================
    echo "Launch cluster installation"
    cd $homedir/cluster
    runuser -u ec2-user -- openshift-install create cluster --dir ./ --log-level=info &
 
-#===========================================================================================================
+#=============================================
 # Adding manually *apps. domain using aws CLI
-#===========================================================================================================
+#=============================================
 
   echo "Waiting for the LB and the cluster zone to be created so to apply the wildcard "apps." record"
 
 # I found that this is a way to check when the hosted zone is created but i know it is not the best way. I need to improve that in the future.
   while ! grep -q "Waiting up to 40m0s" $homedir/cluster/.openshift_install.log ; do
 
-        echo "LB and zone are not yet ready yet"
+        echo "LB and zone are not ready yet"
         sleep 120
 
   done
@@ -324,9 +324,9 @@ then
       ]
     }'
 
-#===========================================================================================================
+#============================================================
 # Allow in node SG Groups access from the registry using SSH
-#===========================================================================================================
+#============================================================
 
 echo "Allow SSH access from registry to the cluster nodes"
 
@@ -346,9 +346,9 @@ aws ec2 authorize-security-group-ingress --group-id $SG_GROUP_ID --protocol tcp 
 
 fi
 
-#===========================================================================================================
+#=================================
 # Disable default Catalog Sources
-#===========================================================================================================
+#=================================
 
 export KUBECONFIG=$homedir/cluster/auth/kubeconfig
 

@@ -246,7 +246,7 @@ func createPullSecretTemplate(pullSecret string) {
 		return
 	}
 
-	// Remove the specified server
+	// Remove the specified server "cloud.openshift.com" for insights operator to not start.
 	auths, authsExist := pullSecretMap["auths"].(map[string]interface{})
 	if authsExist {
 		delete(auths, serverToRemove)
@@ -263,7 +263,7 @@ func createPullSecretTemplate(pullSecret string) {
 	auths[newServer] = newAuth
 
 	// Convert the updated pullSecretMap back to JSON
-	updatedData, err := json.MarshalIndent(pullSecretMap, "", "  ")
+	updatedData, err := json.Marshal(pullSecretMap)
 	if err != nil {
 		fmt.Println("Failed to marshal JSON data:", err)
 		return
