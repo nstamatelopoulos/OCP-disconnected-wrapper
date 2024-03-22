@@ -34,10 +34,82 @@ sudo yum install wget -y -q
 sudo yum install podman -y -q
 sudo yum install jq -y -q
 sudo yum install unzip -y -q
-
+sudo yum install go -y -q
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" 
 unzip awscliv2.zip
 sudo ./aws/install
+
+#============================================
+# Setting up the agent and service files
+#============================================
+
+sudo semanage port -a -t http_cache_port_t -p tcp 8090
+
+sudo cat <<EOF > "/etc/systemd/system/disconnected-registry-agent.service"
+[Unit]
+Description=The Agent for disconnected registy functions
+After=network.target
+
+[Service]
+ExecStart=$homedir/ocpd-agent
+Type=simple
+User=ec2-user
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat <<EOF > "$homedir/ocpd-agent.go"
+package main
+
+import (
+	"fmt"
+	"net/http"
+)
+
+func main() {
+
+	http.HandleFunc("/hello", hello)
+	http.HandleFunc("/headers", headers)
+
+  fmt.Println("Listening on port 8090")
+
+	http.ListenAndServe(":8090", nil)
+}
+
+func hello(w http.ResponseWriter, req *http.Request) {
+
+	fmt.Fprintf(w, "hello\n")
+}
+
+func headers(w http.ResponseWriter, req *http.Request) {
+
+	for name, headers := range req.Header {
+		for _, h := range headers {
+			fmt.Fprintf(w, "%v: %v\n", name, h)
+		}
+	}
+}
+EOF
+
+chown ec2-user:ec2-user $homedir/ocpd-agent.go
+
+echo "Creating binary and tar files for Linux"
+
+sudo -u ec2-user GOOS=linux GOARCH=amd64 go build -o $homedir/ocpd-agent $homedir/ocpd-agent.go
+
+sudo chcon -t httpd_exec_t $homedir/ocpd-agent
+
+echo "Restarting systemd daemon"
+
+sudo systemctl daemon-reload
+
+echo "Starting agent service"
+
+sudo systemctl start disconnected-registry-agent.service
+
+sleep infinity
 
 #============================================
 # Downloading and setting up mirror-registry
@@ -123,6 +195,8 @@ mirror:
         minVersion: $CLUSTER_VERSION
         maxVersion: $CLUSTER_VERSION
 EOF
+
+sleep infinity
 
 cat <<EOF > "$homedir/cluster/install-config.yaml"
 apiVersion: v1

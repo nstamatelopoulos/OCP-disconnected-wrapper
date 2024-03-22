@@ -10,3 +10,4 @@ Disconnected.tf
 terraform
 initData.json
 bin/
+.server-client/
