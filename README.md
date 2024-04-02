@@ -114,4 +114,4 @@ When the user logs in the registry there are 3 directories:
 - The cluster SSH key is under /home/ec2-user/.ssh/cluster_key
 - Mirror registry has SSH access to all nodes
 - The kubeconfig of the cluster is under /home/ec2-user/cluster/auth/kubeconfig
-- One can check the installer progress by running tail -f /home/ec2-user/cluster/.openshift-install.log
+- One can check the installer progress by running tail -f /home/ec2-user/cluster/.openshift_install.log
