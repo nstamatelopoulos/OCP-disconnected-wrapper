@@ -27,6 +27,12 @@ Cluster_VPC_id=${cluster_VPC_id}
 #=======================================
 
 mkdir $homedir/registry-stuff && cd $homedir/registry-stuff
+mkdir $homedir/mirroring-workspace
+mkdir $homedir/cluster
+mkdir $homedir/.aws
+
+chown ec2-user:ec2-user $homedir/mirroring-workspace 
+chown ec2-user:ec2-user $homedir/cluster
 
 echo "Installing podman and wget"
 
@@ -42,7 +48,7 @@ sudo ./aws/install
 # Setting up the agent container
 #============================================
 
-sudo podman run -d --network=host --name agent quay.io/nstamate/agent:v1.2
+sudo podman run -d --network=host --name agent -v $homedir:/ocpd quay.io/nstamate/agent:v1.4
 
 #============================================
 # Downloading and setting up mirror-registry
@@ -90,10 +96,6 @@ sed -i "s/REGISTRY-HOSTNAME/$hostname/g" $homedir/.docker/config.json
 #=================================================================================
 
 echo "Create oc-mirror and cluster workspace directory"
-
-mkdir $homedir/mirroring-workspace
-mkdir $homedir/cluster
-mkdir $homedir/.aws
 
 echo "Downloading oc-mirror"
 
