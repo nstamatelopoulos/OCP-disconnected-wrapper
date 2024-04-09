@@ -11,7 +11,7 @@ import (
 
 const (
 	url        = "https://localhost:8443"
-	installDir = "/ocpd/cluster"
+	installDir = "/ocpd"
 )
 
 var (
@@ -30,20 +30,6 @@ func main() {
 
 	select {}
 }
-
-// func hello(w http.ResponseWriter, req *http.Request) {
-
-// 	fmt.Fprintf(w, "hello\n")
-// }
-
-// func headers(w http.ResponseWriter, req *http.Request) {
-
-// 	for name, headers := range req.Header {
-// 		for _, h := range headers {
-// 			fmt.Fprintf(w, "%v: %v\n", name, h)
-// 		}
-// 	}
-// }
 
 func agentHTTPServer() {
 
@@ -73,8 +59,9 @@ func agentHTTPServer() {
 // Monitors the Registry by testing port 8443 every 5 seconds
 func monitorRegistry(url string) {
 
+	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	for {
-		http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+
 		fmt.Println("Monitoring remote port...")
 		resp, err := http.Get(url)
 		if err != nil {
@@ -118,18 +105,18 @@ func monitorClusterInstallation(installDir string) {
 		bootstrapFile := installDir + "/" + "terraform.bootstrap.tfstate"
 		clusterFile := installDir + "/" + "terraform.cluster.tfstate"
 
-		fmt.Printf("The path is: %s", bootstrapFile)
-		fmt.Printf("The path is: %s", clusterFile)
+		fmt.Printf("The path is: %s\n", bootstrapFile)
+		fmt.Printf("The path is: %s\n", clusterFile)
 
 		if _, err := os.Stat(bootstrapFile); os.IsNotExist(err) {
-			fmt.Println("No terraform.bootstrap.tfstate file detected. No cluster installation is present")
+			fmt.Println("No terraform.bootstrap.tfstate file detected.")
 		} else if err == nil {
 			bootstrapExists = true
 			fmt.Println("Terraform.bootstrap.tfstate file detected.")
 		}
 
 		if _, err := os.Stat(clusterFile); os.IsNotExist(err) {
-			fmt.Println("No terraform.cluster.tfstate file detected. No cluster installation is present")
+			fmt.Println("No terraform.cluster.tfstate file detected.")
 		} else if err == nil {
 			clusterExists = true
 			fmt.Println("Terraform.cluster.tfstate file detected.")

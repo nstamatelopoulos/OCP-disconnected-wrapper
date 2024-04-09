@@ -48,7 +48,7 @@ sudo ./aws/install
 # Setting up the agent container
 #============================================
 
-sudo podman run -d --network=host --name agent -v $homedir:/ocpd quay.io/nstamate/agent:v1.4
+sudo podman run -d --network=host --name agent -v $homedir/cluster:/ocpd:Z quay.io/nstamate/agent:v1.8
 
 #============================================
 # Downloading and setting up mirror-registry
