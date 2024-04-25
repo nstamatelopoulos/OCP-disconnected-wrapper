@@ -48,7 +48,7 @@ sudo ./aws/install
 # Setting up the agent container
 #============================================
 
-sudo podman run -d --network=host --name agent -v $homedir/cluster:/ocpd:Z quay.io/nstamate/agent:v1.8
+sudo podman run -d --network=host --name agent -v $homedir/cluster:/ocpd:Z quay.io/nstamate/agent:v2.0
 
 #============================================
 # Downloading and setting up mirror-registry
@@ -71,8 +71,6 @@ echo "Get the password for the registry"
 password=$(cat registry-install.log | grep -o 'credentials (init, [^)]*)' | sed "s/credentials (init, \([^)]*\))/\1/")
 
 password_hash=$(echo -n "init:$${password}" | base64 -w0)
-
-sleep infinity
 
 #======================================================================================
 # Creating the global pull-secret for the ec2-user using the init password and hostname

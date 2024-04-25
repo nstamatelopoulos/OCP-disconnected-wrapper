@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -20,6 +21,11 @@ var (
 	healthMutex, clusterMutex sync.Mutex
 )
 
+type InfraStatus struct {
+	RegistryHealth string
+	ClusterStatus  string
+}
+
 func main() {
 
 	go monitorRegistry(url)
@@ -34,19 +40,10 @@ func main() {
 func agentHTTPServer() {
 
 	// Here we reply with the status of Registry and Cluster
+	status := &InfraStatus{}
+
 	http.HandleFunc("/status", func(w http.ResponseWriter, req *http.Request) {
-		// Registry Status
-		if getHealthStatus() {
-			fmt.Fprintf(w, "Registry is healthy!\n")
-		} else {
-			fmt.Fprintf(w, "Registry is not healthy!\n")
-		}
-		// Cluster Status
-		if getClusterStatus() {
-			fmt.Fprintf(w, "Cluster is present!\n")
-		} else {
-			fmt.Fprintf(w, "Cluster is not present!\n")
-		}
+		status.statusHandler(w)
 	})
 
 	fmt.Println("Starting HTTP Agent")
@@ -54,6 +51,46 @@ func agentHTTPServer() {
 		fmt.Printf("Error Starting HTTP Agent: %s\n", err)
 	}
 
+}
+
+func (s *InfraStatus) setDataInStruct(getHealthStatus bool, getClusterStatus bool) {
+
+	var registry, cluster string
+
+	if getHealthStatus {
+		registry = "Healthy"
+	} else {
+		registry = "Unknown"
+	}
+
+	if getClusterStatus {
+		cluster = "Exists"
+	} else {
+		cluster = "Unknown"
+	}
+
+	s.RegistryHealth = registry
+	s.ClusterStatus = cluster
+
+}
+
+// Provide the status of the infrastructure as a json http response
+func (s *InfraStatus) statusHandler(w http.ResponseWriter) {
+
+	// Set the response content type to json
+	w.Header().Set("Content-Type", "application/json")
+
+	s.setDataInStruct(getHealthStatus(), getClusterStatus())
+
+	jsonData, err := json.Marshal(s)
+	if err != nil {
+		// If there is an error in marshaling, send an HTTP error
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Write the JSON data to the response
+	w.Write(jsonData)
 }
 
 // Monitors the Registry by testing port 8443 every 5 seconds
