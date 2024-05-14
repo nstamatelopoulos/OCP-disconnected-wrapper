@@ -13,7 +13,7 @@ import (
 
 const (
 	registryScriptTemplate = "./registry-mirror-script-terraform.sh.temp"
-	registryScript         = "./registry-mirror-script-terraform.tpl"
+	registryScript         = "./registry-mirror-script-terraform.sh"
 	pullSecretTemplate     = "./pull-secret.template"
 	initFileName           = "initData.json"
 	currentStateFile       = "cluster.txt"

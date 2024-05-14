@@ -109,15 +109,7 @@ resource "aws_instance" "mirror-registry" {
   subnet_id     = aws_subnet.registry-subnet.id
   vpc_security_group_ids = [aws_security_group.registry-sg.id]
 
-  user_data = templatefile("registry-mirror-script-terraform.tpl", {
-        private_subnet_1 = var.Create_Cluster ? module.Cluster_Dependencies[0].Subnet_1 : "N/A"
-        private_subnet_2 = var.Create_Cluster ? module.Cluster_Dependencies[0].Subnet_2 : "N/A"
-        private_subnet_3 = var.Create_Cluster ? module.Cluster_Dependencies[0].Subnet_3 : "N/A"
-        region           = data.aws_region.current.name
-        access_key_id     = var.Create_Cluster ? module.Cluster_Dependencies[0].IAM_User_Access_Key_id : "N/A"
-        access_key_secret = var.Create_Cluster ? module.Cluster_Dependencies[0].IAM_User_Access_key_Secret : "N/A"
-        cluster_VPC_id    = aws_vpc.disconnected-vpc.id
-  })
+  user_data = file("${path.module}/registry-mirror-script-terraform.sh")
   
   root_block_device {
     volume_size = 700
