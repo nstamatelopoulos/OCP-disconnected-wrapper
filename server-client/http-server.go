@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"sync"
 	"time"
 )
@@ -180,4 +181,20 @@ func getClusterStatus() bool {
 	clusterMutex.Lock()
 	defer clusterMutex.Unlock()
 	return isClusterInstalled
+}
+
+func installOrDestroyCluster(destroy bool) {
+
+	var mode string
+
+	if destroy {
+		mode = "destroy"
+	} else {
+		mode = "install"
+	}
+
+	destroyCommand := "openshift-install" + "" + mode + "" + "cluster" + "--dir=" + installDir
+	cmd := exec.Command("bash", "-c", destroyCommand)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 }
