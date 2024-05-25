@@ -98,3 +98,17 @@ echo "Adding the rootCA to the host so registry to be trusted"
 sudo cp $homedir/registry-stuff/quay-rootCA/rootCA.pem /etc/pki/ca-trust/source/anchors/
 
 sudo update-ca-trust
+
+#===============================================================================================
+# Creating the .aws/Credentials file with the static credentials from the cluster deployer user
+#===============================================================================================
+
+mkdir $homedir/.aws
+
+cat <<EOF > $homedir/.aws/credentials
+[default]
+aws_access_key_id = ${access_key_id}
+aws_secret_access_key = ${access_key_secret}
+EOF
+
+chown -R ec2-user:ec2-user $homedir/.aws/

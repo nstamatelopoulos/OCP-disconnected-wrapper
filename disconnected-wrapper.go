@@ -12,11 +12,10 @@ import (
 )
 
 const (
-	registryScriptTemplate = "./registry-mirror-script-terraform.sh.temp"
-	registryScript         = "./registry-mirror-script-terraform.sh"
-	pullSecretTemplate     = "./pull-secret.template"
+	registryScriptTemplate = "registry-mirror-script-terraform.sh.temp"
+	registryScript         = "registry-mirror-script-terraform.tpl"
+	pullSecretTemplate     = "pull-secret.template"
 	initFileName           = "initData.json"
-	currentStateFile       = "cluster.txt"
 )
 
 var regions = map[string]string{
@@ -215,11 +214,12 @@ func updateBashScript(private bool, clusterVersion string, sdnCNI bool) {
 	}
 }
 
-// To clean up the bash script, pull secret template and .tfvars generated files after successfull deployment of the registry.
+// To clean up the bash script, pull secret template, .tfvars and TF details filesgenerated files after successfull deployment of the registry.
 func deleteGeneratedFiles() {
 	Script := os.Remove(registryScript)
 	PullSecretTemp := os.Remove(pullSecretTemplate)
 	os.Remove("terraform.tfvars")
+	os.Remove("terraform_details.json")
 
 	if Script != nil || PullSecretTemp != nil {
 		return

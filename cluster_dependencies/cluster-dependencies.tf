@@ -91,7 +91,7 @@ resource "aws_subnet" "private-1" {
   vpc_id     = var.Vpc_ID
   cidr_block = "10.0.0.32/27"
   availability_zone = var.Child_Availability_Zone_A
-  
+
   tags = {
     Name = "Private-1"
   }
@@ -142,9 +142,9 @@ output Subnet_1 {
 }
 
 output Subnet_2 {
-  value = aws_subnet.private-1.id
+  value = aws_subnet.private-2.id
 }
 
 output Subnet_3 {
-  value = aws_subnet.private-1.id
+  value = aws_subnet.private-3.id
 }
