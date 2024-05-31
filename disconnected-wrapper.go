@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"reflect"
 	"strings"
 )
 
@@ -154,6 +155,8 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 		log.Fatalf("Failed to execute terraform apply: %v", err)
 	}
 
+	MonitoringDeployment()
+
 }
 
 func destroyRegistry() {
@@ -219,7 +222,7 @@ func deleteGeneratedFiles() {
 	Script := os.Remove(registryScript)
 	PullSecretTemp := os.Remove(pullSecretTemplate)
 	os.Remove("terraform.tfvars")
-	os.Remove("terraform_details.json")
+	os.Remove("infra_details.json")
 
 	if Script != nil || PullSecretTemp != nil {
 		return
@@ -484,4 +487,72 @@ func checkDeploymentState() {
 		os.Exit(1)
 	}
 
+}
+
+// Here we difine the struct that will hold the infrastructure details.
+
+type InfraDetails struct {
+	AWSRegion         string `json:"aws_region"`
+	InstancePublicDNS string `json:"instance_public_dns"`
+	PrivateSubnet1    string `json:"private_subnet_1"`
+	PrivateSubnet2    string `json:"private_subnet_2"`
+	PrivateSubnet3    string `json:"private_subnet_3"`
+}
+
+// This functions gets the infrastructure ids from terraform and adds them in the struct InfraDetails
+func GetInfraDetails(detail string) string {
+
+	initString := "terraform output --raw "
+
+	region, err := GetTerraformOutputs(initString + "region")
+	if err != nil {
+		log.Fatalf("Failed to get region: %s\n", err)
+	}
+
+	instanceDNS, err := GetTerraformOutputs(initString + "ec2_instance_public_dns")
+	if err != nil {
+		log.Fatalf("Failed to get instanceId: %s\n", err)
+	}
+
+	subnet1ID, err := GetTerraformOutputs(initString + "private_subnet_1_id")
+	if err != nil {
+		log.Fatalf("Failed to get private subnet 1: %s\n", err)
+	}
+
+	subnet2ID, err := GetTerraformOutputs(initString + "private_subnet_2_id")
+	if err != nil {
+		log.Fatalf("Failed to get private subnet 2: %s\n", err)
+	}
+
+	subnet3ID, err := GetTerraformOutputs(initString + "private_subnet_3_id")
+	if err != nil {
+		log.Fatalf("Failed to get private subnet 3: %s\n", err)
+	}
+
+	infraDetails := InfraDetails{
+		AWSRegion:         region,
+		InstancePublicDNS: instanceDNS,
+		PrivateSubnet1:    subnet1ID,
+		PrivateSubnet2:    subnet2ID,
+		PrivateSubnet3:    subnet3ID,
+	}
+
+	val := reflect.ValueOf(infraDetails)
+	fieldVal := val.FieldByName(detail)
+
+	if fieldVal.IsValid() && fieldVal.Kind() == reflect.String {
+		return fieldVal.String()
+	} else {
+		log.Fatalf("Invalid detail requested: %s\n", detail)
+		return ""
+	}
+}
+
+func GetTerraformOutputs(Cmd string) (string, error) {
+	cmd := exec.Command("bash", "-c", Cmd)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
 }

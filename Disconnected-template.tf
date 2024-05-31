@@ -153,7 +153,7 @@ module Cluster_Dependencies {
 
 
 output "region" {
-  value = data.aws_region.current
+  value = data.aws_region.current.name
   description = "The region of the infrastructure"
 }
 output "private_subnet_1_id" {
