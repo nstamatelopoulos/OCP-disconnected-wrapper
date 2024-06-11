@@ -53,12 +53,41 @@ func main() {
 	openshiftCNI := flag.Bool("sdn", false, "Use SDN CNI for the cluster instead. OVN is the default")
 	helpFlag := flag.Bool("help", false, "Help")
 	statusFlag := flag.Bool("status", false, "Status of the deployment")
+	addClusterFlag := flag.Bool("addCluster", false, "To deploy a cluster but keep the existing registry")
 
 	flag.Parse()
 
 	consolidatedFlagCheckFunction(*installFlag, *destroyFlag, *region, *clusterVersion, *initFlag, *helpFlag, *openshiftCNI)
 
 	Ec2Url := GetInfraDetails("InstancePublicDNS")
+
+	if *addClusterFlag {
+
+		// Read the contents of the Terraform template file
+		fmt.Println("Updating .tfvars file with cluster flag")
+		templateContent, err := os.ReadFile("terraform.tfvars")
+		if err != nil {
+			fmt.Println("Cannot read template file")
+			return
+		}
+
+		// Set the cluster flag to true and create the terraform.tfvars file
+		replacedClusterFlag := strings.ReplaceAll(string(templateContent), "false", "true")
+		err = os.WriteFile("terraform.tfvars", []byte(replacedClusterFlag), 0644)
+		if err != nil {
+			fmt.Println("Cannot write the Terraform config file")
+			return
+		}
+
+		cmd := exec.Command("terraform", "apply", "-target=module.Cluster_Dependencies", "-auto-approve")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		error := cmd.Run()
+		if error != nil {
+			fmt.Printf("Terraform apply failed with: %v", error)
+		}
+	}
 
 	if *statusFlag {
 		MonitoringDeployment(Ec2Url)
@@ -80,7 +109,7 @@ func main() {
 			fmt.Println("No terraform.tfstate file detected. The tool is probably run for the first time")
 		} else if err == nil {
 			fmt.Println("The terraform.tfstate file is detected. Checking current state.")
-			checkDeploymentState()
+			//checkDeploymentState()
 		} else {
 			fmt.Println("Error:", err)
 		}
@@ -437,61 +466,61 @@ func initialization(initFile string) {
 	fmt.Printf("Using public-key from file: %v\n", publicKeyPath)
 }
 
-func checkDeploymentState() {
-	// Read the JSON file
-	jsonData, err := os.ReadFile("./terraform.tfstate")
-	if err != nil {
-		log.Fatal(err)
-	}
+// func checkDeploymentState() {
+// 	// Read the JSON file
+// 	jsonData, err := os.ReadFile("./terraform.tfstate")
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	// Unmarshal the JSON into an empty interface (map[string]interface{})
-	var data map[string]interface{}
-	if err := json.Unmarshal(jsonData, &data); err != nil {
-		log.Fatal(err)
-	}
+// 	// Unmarshal the JSON into an empty interface (map[string]interface{})
+// 	var data map[string]interface{}
+// 	if err := json.Unmarshal(jsonData, &data); err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	// Check if "resources" key exists
-	resources, resourcesExist := data["resources"].([]interface{})
-	if !resourcesExist {
-		log.Fatal("Error: 'resources' key is missing or not an array")
-	}
+// 	// Check if "resources" key exists
+// 	resources, resourcesExist := data["resources"].([]interface{})
+// 	if !resourcesExist {
+// 		log.Fatal("Error: 'resources' key is missing or not an array")
+// 	}
 
-	// Search for "aws_instance" type
-	awsInstanceExists := false
-	for _, resource := range resources {
-		if res, ok := resource.(map[string]interface{}); ok {
-			if resType, typeExist := res["type"].(string); typeExist && resType == "aws_instance" {
-				awsInstanceExists = true
-				break
-			}
-		}
-	}
+// 	// Search for "aws_instance" type
+// 	awsInstanceExists := false
+// 	for _, resource := range resources {
+// 		if res, ok := resource.(map[string]interface{}); ok {
+// 			if resType, typeExist := res["type"].(string); typeExist && resType == "aws_instance" {
+// 				awsInstanceExists = true
+// 				break
+// 			}
+// 		}
+// 	}
 
-	// Search for "aws_iam_user" type
-	awsUserExists := false
-	for _, resource := range resources {
-		if res, ok := resource.(map[string]interface{}); ok {
-			if resType, typeExist := res["type"].(string); typeExist && resType == "aws_iam_user" {
-				awsUserExists = true
-				break
-			}
-		}
-	}
+// 	// Search for "aws_iam_user" type
+// 	awsUserExists := false
+// 	for _, resource := range resources {
+// 		if res, ok := resource.(map[string]interface{}); ok {
+// 			if resType, typeExist := res["type"].(string); typeExist && resType == "aws_iam_user" {
+// 				awsUserExists = true
+// 				break
+// 			}
+// 		}
+// 	}
 
-	// Check what resources exist.
-	if awsInstanceExists && awsUserExists {
-		fmt.Println("There is already infrastructure present. You cannot deploy new infrastructure before destroy the current one")
-		clusterInfo := "Already installed mirror registry and cluster"
-		fmt.Println(clusterInfo)
-		os.Exit(1)
-	} else if awsInstanceExists {
-		fmt.Println("There is already infrastructure present. You cannot deploy new infrastructure before destroy the current one")
-		clusterInfo := "Already installed mirror registry"
-		fmt.Println(clusterInfo)
-		os.Exit(1)
-	}
+// 	// Check what resources exist.
+// 	if awsInstanceExists && awsUserExists {
+// 		fmt.Println("There is already infrastructure present. You cannot deploy new infrastructure before destroy the current one")
+// 		clusterInfo := "Already installed mirror registry and cluster"
+// 		fmt.Println(clusterInfo)
+// 		os.Exit(1)
+// 	} else if awsInstanceExists {
+// 		fmt.Println("There is already infrastructure present. You cannot deploy new infrastructure before destroy the current one")
+// 		clusterInfo := "Already installed mirror registry"
+// 		fmt.Println(clusterInfo)
+// 		os.Exit(1)
+// 	}
 
-}
+// }
 
 // Here we difine the struct that will hold the infrastructure details.
 
