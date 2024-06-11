@@ -29,6 +29,12 @@ type InfraStatus struct {
 
 func main() {
 
+	fmt.Println("Sleeping for 3 minutes until the registry initializes")
+
+	time.Sleep(3 * time.Minute)
+
+	fmt.Println("Starting monitoring the deployment")
+
 	go monitorRegistry(url)
 
 	go monitorClusterInstallation(installDir)
@@ -39,6 +45,8 @@ func main() {
 }
 
 func agentHTTPServer() {
+
+	fmt.Println("Starting HTTP agent-server")
 
 	// Here we reply with the status of Registry and Cluster
 	status := &InfraStatus{}
@@ -61,13 +69,13 @@ func (s *InfraStatus) setDataInStruct(getHealthStatus bool, getClusterStatus boo
 	if getHealthStatus {
 		registry = "Healthy"
 	} else {
-		registry = "Unknown"
+		registry = "Unhealthy"
 	}
 
 	if getClusterStatus {
 		cluster = "Exists"
 	} else {
-		cluster = "Unknown"
+		cluster = "DontExist"
 	}
 
 	s.RegistryHealth = registry
@@ -193,8 +201,8 @@ func installOrDestroyCluster(destroy bool) {
 		mode = "install"
 	}
 
-	destroyCommand := "openshift-install" + "" + mode + "" + "cluster" + "--dir=" + installDir
-	cmd := exec.Command("bash", "-c", destroyCommand)
+	installDestroyCommand := "openshift-install" + "" + mode + "" + "cluster" + "--dir=" + installDir
+	cmd := exec.Command("bash", "-c", installDestroyCommand)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 }

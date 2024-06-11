@@ -52,11 +52,17 @@ func main() {
 	initFlag := flag.Bool("init", false, "Saving pull-secret and public-key for ease of use")
 	openshiftCNI := flag.Bool("sdn", false, "Use SDN CNI for the cluster instead. OVN is the default")
 	helpFlag := flag.Bool("help", false, "Help")
+	statusFlag := flag.Bool("status", false, "Status of the deployment")
 
 	flag.Parse()
 
 	consolidatedFlagCheckFunction(*installFlag, *destroyFlag, *region, *clusterVersion, *initFlag, *helpFlag, *openshiftCNI)
 
+	Ec2Url := GetInfraDetails("InstancePublicDNS")
+
+	if *statusFlag {
+		MonitoringDeployment(Ec2Url)
+	}
 	// If init flag is used then start interactive prompt to get the paths
 	if *initFlag {
 		initialization(initFileName)
@@ -154,8 +160,6 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 	if err != nil {
 		log.Fatalf("Failed to execute terraform apply: %v", err)
 	}
-
-	MonitoringDeployment()
 
 }
 
