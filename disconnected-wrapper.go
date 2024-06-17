@@ -522,7 +522,7 @@ func initialization(initFile string) {
 
 // }
 
-// Here we difine the struct that will hold the infrastructure details.
+// Here we define the struct that will hold the infrastructure details.
 
 type InfraDetails struct {
 	AWSRegion         string `json:"aws_region"`
@@ -532,7 +532,7 @@ type InfraDetails struct {
 	PrivateSubnet3    string `json:"private_subnet_3"`
 }
 
-// This functions gets the infrastructure ids from terraform and adds them in the struct InfraDetails
+// This functions gets the infrastructure ids from terraform and adds them in the struct InfraDetails for later use from the program
 func GetInfraDetails(detail string) string {
 
 	initString := "terraform output --raw "
@@ -562,7 +562,7 @@ func GetInfraDetails(detail string) string {
 		log.Fatalf("Failed to get private subnet 3: %s\n", err)
 	}
 
-	infraDetails := InfraDetails{
+	CurrentinfraDetails := InfraDetails{
 		AWSRegion:         region,
 		InstancePublicDNS: instanceDNS,
 		PrivateSubnet1:    subnet1ID,
@@ -570,7 +570,7 @@ func GetInfraDetails(detail string) string {
 		PrivateSubnet3:    subnet3ID,
 	}
 
-	val := reflect.ValueOf(infraDetails)
+	val := reflect.ValueOf(CurrentinfraDetails)
 	fieldVal := val.FieldByName(detail)
 
 	if fieldVal.IsValid() && fieldVal.Kind() == reflect.String {

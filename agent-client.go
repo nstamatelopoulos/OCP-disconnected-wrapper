@@ -1,12 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 //==========================================================================================
@@ -15,9 +19,15 @@ import (
 
 func MonitoringDeployment(URL string) {
 
-	fmt.Println(URL)
+	var httpUrl string
 
-	ClientGetStatus(URL)
+	if !startsWithHTTP(URL) {
+		httpUrl = "http://" + URL
+	}
+
+	fmt.Println(httpUrl)
+
+	ClientGetStatus(httpUrl)
 
 }
 
@@ -30,10 +40,6 @@ type InfraState struct {
 func ClientGetStatus(url string) bool {
 
 	fmt.Println("ClientGetStatus started")
-
-	if !startsWithHTTP(url) {
-		url = "http://" + url
-	}
 
 	resp, err := http.Get(url + ":8090/status")
 	if err != nil {
@@ -68,4 +74,39 @@ func ClientGetStatus(url string) bool {
 // To check if the URL is in appropriate format for the client
 func startsWithHTTP(url string) bool {
 	return len(url) >= 7 && (url[:7] == "http://" || len(url) >= 8 && url[:8] == "https://")
+}
+
+func sendClusterDetailsToServer(installconfig string, url string) {
+	// Read the YAML file
+	yamlFile, err := os.ReadFile(installconfig)
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
+
+	// Convert the YAML to a generic map
+	var yamlData map[string]interface{}
+	err = yaml.Unmarshal(yamlFile, &yamlData)
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
+
+	// Marshal the map into a JSON string
+	jsonData, err := json.Marshal(yamlData)
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
+
+	// Send the JSON data to the server
+	resp, err := http.Post(url+":8090/deploy", "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Print response from server
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
+	log.Println("Response from server:", string(body))
 }
