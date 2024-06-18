@@ -4,11 +4,14 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"sync"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -29,9 +32,9 @@ type InfraStatus struct {
 
 func main() {
 
-	fmt.Println("Sleeping for 3 minutes until the registry initializes")
+	// fmt.Println("Sleeping for 3 minutes until the registry initializes")
 
-	time.Sleep(3 * time.Minute)
+	// time.Sleep(3 * time.Minute)
 
 	fmt.Println("Starting monitoring the deployment")
 
@@ -53,6 +56,10 @@ func agentHTTPServer() {
 
 	http.HandleFunc("/status", func(w http.ResponseWriter, req *http.Request) {
 		status.statusHandler(w)
+	})
+
+	http.HandleFunc("/deploy", func(w http.ResponseWriter, r *http.Request) {
+		deployHandler(w, r)
 	})
 
 	fmt.Println("Starting HTTP Agent")
@@ -83,7 +90,9 @@ func (s *InfraStatus) setDataInStruct(getHealthStatus bool, getClusterStatus boo
 
 }
 
-// Provide the status of the infrastructure as a json http response
+// ======================================================================================
+// This is the HTTP handler for requests comming on path /status
+// ======================================================================================
 func (s *InfraStatus) statusHandler(w http.ResponseWriter) {
 
 	// Set the response content type to json
@@ -102,7 +111,60 @@ func (s *InfraStatus) statusHandler(w http.ResponseWriter) {
 	w.Write(jsonData)
 }
 
+//======================================================================================
+//This is the HTTP handler for requests comming on path /deploy
+//======================================================================================
+
+func deployHandler(w http.ResponseWriter, r *http.Request) {
+	// Read the request body
+	fmt.Println("Using deployHandler")
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Unable to read request body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	// Unmarshal the JSON data to a generic map
+	fmt.Println("Unmarshal the JSON")
+	var jsonData map[string]interface{}
+	err = json.Unmarshal(body, &jsonData)
+	if err != nil {
+		fmt.Println("Unmarshal the JSON error:", err)
+		http.Error(w, "Invalid JSON data", http.StatusBadRequest)
+		return
+	}
+
+	// Marshal the map back to YAML
+	fmt.Println("Marshal the JSON to yaml")
+	yamlData, err := yaml.Marshal(jsonData)
+	if err != nil {
+		fmt.Println("Marshal the JSON to yaml:", err)
+		http.Error(w, "Error converting to YAML", http.StatusInternalServerError)
+		return
+	}
+
+	// Save the YAML data to a file
+	fmt.Println("Save the YAML data to a file")
+	filePath := installDir + "/install-config.yaml"
+
+	fmt.Println("The file path is:", filePath)
+	err = os.WriteFile(filePath, yamlData, 0644)
+	if err != nil {
+		http.Error(w, "Error writing file", http.StatusInternalServerError)
+		fmt.Println("Save the YAML data to a file error is:", err)
+		return
+	}
+
+	// Respond to the client
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Data received and saved successfully"))
+}
+
+//======================================================================================
 // Monitors the Registry by testing port 8443 every 5 seconds
+//======================================================================================
+
 func monitorRegistry(url string) {
 
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
@@ -140,8 +202,11 @@ func getHealthStatus() bool {
 	return isRegistryHealthy
 }
 
+//======================================================================================
 // Here we monitor the if the cluster installation is present. We check that by checking for a terraform.tfstate files in the installation directory.
 // We check every 5 seconds.
+//======================================================================================
+
 func monitorClusterInstallation(installDir string) {
 
 	for {
@@ -191,6 +256,9 @@ func getClusterStatus() bool {
 	return isClusterInstalled
 }
 
+// ======================================================================================
+// This is to start the openshift installation using the OCP installer
+// ======================================================================================
 func installOrDestroyCluster(destroy bool) {
 
 	var mode string

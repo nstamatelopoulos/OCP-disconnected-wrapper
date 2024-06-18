@@ -17,6 +17,7 @@ const (
 	registryScript         = "registry-mirror-script-terraform.tpl"
 	pullSecretTemplate     = "pull-secret.template"
 	initFileName           = "initData.json"
+	installConfigDefault   = "./installConfigDefault.yaml"
 )
 
 var regions = map[string]string{
@@ -54,43 +55,27 @@ func main() {
 	helpFlag := flag.Bool("help", false, "Help")
 	statusFlag := flag.Bool("status", false, "Status of the deployment")
 	addClusterFlag := flag.Bool("addCluster", false, "To deploy a cluster but keep the existing registry")
+	installConfigFlag := flag.Bool("installConfig", false, "Edit the default install-config.yaml")
 
 	flag.Parse()
 
 	consolidatedFlagCheckFunction(*installFlag, *destroyFlag, *region, *clusterVersion, *initFlag, *helpFlag, *openshiftCNI)
 
-	Ec2Url := GetInfraDetails("InstancePublicDNS")
+	var installConfig string
+
+	if *installConfigFlag {
+		installConfig = "installConfigCustom" // To make it compile i added this string but this should be changed to allow user edit the default install-config.yaml
+	} else {
+		installConfig = installConfigDefault
+	}
 
 	if *addClusterFlag {
-
-		// Read the contents of the Terraform template file
-		fmt.Println("Updating .tfvars file with cluster flag")
-		templateContent, err := os.ReadFile("terraform.tfvars")
-		if err != nil {
-			fmt.Println("Cannot read template file")
-			return
-		}
-
-		// Set the cluster flag to true and create the terraform.tfvars file
-		replacedClusterFlag := strings.ReplaceAll(string(templateContent), "false", "true")
-		err = os.WriteFile("terraform.tfvars", []byte(replacedClusterFlag), 0644)
-		if err != nil {
-			fmt.Println("Cannot write the Terraform config file")
-			return
-		}
-
-		cmd := exec.Command("terraform", "apply", "-target=module.Cluster_Dependencies", "-auto-approve")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		error := cmd.Run()
-		if error != nil {
-			fmt.Printf("Terraform apply failed with: %v", error)
-		}
+		installCluster(installConfig)
 	}
 
 	if *statusFlag {
-		MonitoringDeployment(Ec2Url)
+		Ec2UrlRaw := GetInfraDetails("InstancePublicDNS")
+		MonitoringDeployment(Ec2UrlRaw)
 	}
 	// If init flag is used then start interactive prompt to get the paths
 	if *initFlag {
