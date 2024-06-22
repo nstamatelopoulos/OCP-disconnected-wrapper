@@ -22,12 +22,9 @@ mkdir $homedir/.aws
 chown ec2-user:ec2-user $homedir/mirroring-workspace 
 chown ec2-user:ec2-user $homedir/cluster
 
-echo "Installing podman and wget"
+echo "Installing required packages"
 
-sudo yum install wget -y -q
-sudo yum install podman -y -q
-sudo yum install jq -y -q
-sudo yum install unzip -y -q
+sudo yum install wget podman jq unzip -y -q
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" 
 unzip awscliv2.zip
 sudo ./aws/install
@@ -36,7 +33,10 @@ sudo ./aws/install
 # Setting up the agent container
 #============================================
 
-sudo podman run -d --network=host --name agent -v $homedir/cluster:/ocpd:Z quay.io/nstamate/agent:v2.7
+sudo podman run -d --pid=host --network=host \
+--name agent \
+-v /home/ec2-user:/ec2-user \
+quay.io/nstamate/agent:v4.2
 
 #============================================
 # Downloading and setting up mirror-registry
@@ -91,7 +91,7 @@ tar -xf $homedir/mirroring-workspace/oc-mirror.tar.gz -C $homedir/mirroring-work
 
 chmod +x $homedir/mirroring-workspace/oc-mirror
 
-mv ./oc-mirror /usr/local/bin
+mv $homedir/mirroring-workspace/oc-mirror /usr/local/bin
 
 echo "Adding the rootCA to the host so registry to be trusted"
 
@@ -112,3 +112,13 @@ aws_secret_access_key = ${access_key_secret}
 EOF
 
 chown -R ec2-user:ec2-user $homedir/.aws/
+
+#===========================================================
+# Let the user know that the mirror registry is ready to use
+#===========================================================
+
+echo "Registry is ready to mirror"
+
+cat <<EOF > "$homedir/READY"
+The registry was initialized successfully!
+EOF

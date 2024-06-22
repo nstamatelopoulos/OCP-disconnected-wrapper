@@ -6,47 +6,48 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
+
+var agentStatus *InfraState
+var infraDetailsStatus *InfraDetails
+var agentAction *DeployDestroy
+
+func init() {
+	agentStatus = &InfraState{}
+	infraDetailsStatus = &InfraDetails{}
+	agentAction = &DeployDestroy{}
+}
 
 //==========================================================================================
 // Client type of functions
 //==========================================================================================
 
-func MonitoringDeployment(url string) (string, string) {
-
-	if !startsWithHTTP(url) {
-		url = "http://" + url
-	}
-
-	fmt.Println(url)
-
-	registryHealth, clusterStatus := ClientGetStatus(url)
-
-	return registryHealth, clusterStatus
-
+type DeployDestroy struct {
+	ClusterVersion string
+	Deploy         string
 }
 
 type InfraState struct {
-	RegistryHealth string `json:"RegistryHealth"`
-	ClusterStatus  string `json:"ClusterStatus"`
+	RegistryHealth string
+	ClusterStatus  string
 }
 
 // Function to get the client status using HTTP. It expects a reply from the server-agent.
-func ClientGetStatus(url string) (string, string) {
+func ClientGetStatus(url string) bool {
 
-	fmt.Println("ClientGetStatus started")
+	fmt.Println("Status Get Request...")
 
-	resp, err := http.Get(url + ":8090/status")
+	resp, err := http.Get("http://" + url + ":8090/status")
 	if err != nil {
 		log.Println("Error making GET request:", err)
-		time.Sleep(5 * time.Second)
+		os.Exit(3)
+		return false
 	}
 
 	defer resp.Body.Close()
@@ -55,51 +56,35 @@ func ClientGetStatus(url string) (string, string) {
 	if err != nil {
 		log.Println("Error reading response body:", err)
 		time.Sleep(5 * time.Second)
+		return false
 	}
 
-	s := &InfraState{}
-
-	if err := json.Unmarshal(body, s); err != nil {
+	if err := json.Unmarshal(body, agentStatus); err != nil {
 		fmt.Printf("error Unmarshaling JSON: %v\n", err)
 		time.Sleep(5 * time.Second)
+		return false
 	}
 
-	fmt.Println("InfraState: ", s)
+	fmt.Println("InfraState: ", agentStatus)
 
-	return s.RegistryHealth, s.ClusterStatus
+	//Check the status of the deployment
+	if agentStatus.RegistryHealth == "Healthy" && agentStatus.ClusterStatus == "DontExist" {
+		return true
+	} else if agentStatus.RegistryHealth == "Healthy" && agentStatus.ClusterStatus == "Exist" {
+		fmt.Println("There is already a cluster installation in place. Cannot deploy a new one.")
+		os.Exit(2)
+	} else if agentStatus.ClusterStatus == "Unhealthy" {
+		fmt.Println("The mirror registry is not healthy. Cannot deploy cluster until is fixed.")
+		os.Exit(2)
+	}
+	return false
 }
 
-// To check if the URL is in appropriate format for the client
-func startsWithHTTP(url string) bool {
-	return len(url) >= 7 && (url[:7] == "http://" || len(url) >= 8 && url[:8] == "https://")
-}
-
-func sendClusterDetailsToAgent(installconfig string, url string) {
-	// Read the YAML file
-	fmt.Println("Reading Install Config from path:", installconfig)
-	yamlFile, err := os.ReadFile(installconfig)
-	if err != nil {
-		log.Fatalf("error: %v", err)
-	}
-
-	// Convert the YAML to a generic map
-	fmt.Println("Converting to map")
-	var yamlData map[string]interface{}
-	err = yaml.Unmarshal(yamlFile, &yamlData)
-	if err != nil {
-		log.Fatalf("error: %v", err)
-	}
-
-	// Marshal the map into a JSON string
-	fmt.Println("Marshaling the map to json")
-	jsonData, err := json.Marshal(yamlData)
-	if err != nil {
-		log.Fatalf("error: %v", err)
-	}
+func sendInstallConfigToAgent(installconfig string, url string) {
 
 	// Send the JSON data to the server
-	fmt.Println("Sending the data using Post request")
-	resp, err := http.Post("http://"+url+":8090/deploy", "application/json", bytes.NewBuffer(jsonData))
+	fmt.Println("Sending the installConfig using Post request")
+	resp, err := http.Post("http://"+url+":8090/data", "application/json", bytes.NewBuffer([]byte(installconfig)))
 	if err != nil {
 		log.Fatalf("error: %v", err)
 	}
@@ -113,9 +98,61 @@ func sendClusterDetailsToAgent(installconfig string, url string) {
 	log.Println("Response from server:", string(body))
 }
 
-func installCluster(installConfig string) {
+func sendActionAndVersionToAgent(url string) {
+
+	actionForAgent, err := json.Marshal(agentAction)
+	if err != nil {
+		// If there is an error in marshaling print the error
+		fmt.Println("Error marshaling actionForAgent to JSON:", err)
+		return
+	}
+	// Send the JSON data to the server
+	fmt.Println("Sending actionForAgent using Post request")
+	req, err := http.NewRequest("POST", "http://"+url+":8090/action", bytes.NewBuffer(actionForAgent))
+	if err != nil {
+		fmt.Println("Error creating actionForAgent request:", err)
+		return
+	}
+	// Send the request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("Error sending request actionForAgent:", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Check the response
+	if resp.StatusCode == http.StatusOK {
+		fmt.Println("ActionForAgent Data sent successfully!")
+	} else {
+		fmt.Println("Failed to send data actionForAgent. Status code:", resp.StatusCode)
+	}
+}
+
+func populateActionAndVersion(action bool, version string) {
+
+	if action && len(version) > 0 {
+		agentAction.Deploy = "Install"
+		agentAction.ClusterVersion = version
+	} else if !action && len(version) == 0 {
+		agentAction.Deploy = "Destroy"
+		agentAction.ClusterVersion = "N/A"
+	} else {
+		fmt.Println("Invalid input. Do nothing.")
+		os.Exit(4)
+	}
+
+}
+
+//======================================================================================
+//Check the status of the deployment
+//======================================================================================
+
+func applyTerraformConfig(CNIFlag bool) {
+
 	//======================================================================================
-	//The below is the Terraform part of the infrastructure. Not the openshift-install part.
+	//The below is the deployment of the Terraform part of the infrastructure.
 	//======================================================================================
 
 	// Read the contents of the Terraform template file
@@ -146,15 +183,31 @@ func installCluster(installConfig string) {
 	// Wait some seconds for terraform to get applied
 	time.Sleep(5 * time.Second)
 
-	//======================================================================================
-	//The below is the openshift-install part.
-	//======================================================================================
+}
 
-	Ec2UrlRaw := GetInfraDetails("InstancePublicDNS")
+func populateInstallConfigValues(sdnFlag bool) string {
 
-	registryHealth, clusterStatus := MonitoringDeployment(Ec2UrlRaw)
+	installConfig := `{"apiVersion":"v1","baseDomain":"emea.aws.cee.support","credentialsMode":"Passthrough","compute":[{"architecture":"amd64","hyperthreading":"Enabled","name":"worker","platform":{},"replicas":3}],"controlPlane":{"architecture":"amd64","hyperthreading":"Enabled","name":"master","platform":{},"replicas":3},"metadata":{"creationTimestamp":null,"name":"disconnected-$RANDOM_VALUE"},"networking":{"clusterNetwork":[{"cidr":"10.128.0.0/14","hostPrefix":23}],"machineNetwork":[{"cidr":"10.0.0.32/27"},{"cidr":"10.0.0.64/27"},{"cidr":"10.0.0.96/27"}],"networkType":"$CNI","serviceNetwork":["172.30.0.0/16"]},"platform":{"aws":{"region":"${region}","subnets":["${private_subnet_1}","${private_subnet_2}","${private_subnet_3}"]}},"publish":"Internal","imageContentSources":[{"mirrors":["$hostname:8443/openshift/release"],"source":"quay.io/openshift-release-dev/ocp-v4.0-art-dev"},{"mirrors":["$hostname:8443/openshift/release-images"],"source":"quay.io/openshift-release-dev/ocp-release"}]}`
 
-	if registryHealth == "Healthy" && clusterStatus == "DontExist" {
-		sendClusterDetailsToAgent(installConfig, Ec2UrlRaw)
+	randomValue := rand.Intn(99999-10000+1) + 10000
+
+	randomValueStr := fmt.Sprintf("%d", randomValue)
+
+	var cni string
+
+	if sdnFlag {
+		cni = "OpenShiftSDN"
+	} else {
+		cni = "OVNKubernetes"
 	}
+
+	randomName := strings.ReplaceAll(installConfig, "$RANDOM_VALUE", randomValueStr)
+	region := strings.ReplaceAll(randomName, "${region}", infraDetailsStatus.AWSRegion)
+	subnet_1 := strings.ReplaceAll(region, "${private_subnet_1}", infraDetailsStatus.PrivateSubnet1)
+	subnet_2 := strings.ReplaceAll(subnet_1, "${private_subnet_2}", infraDetailsStatus.PrivateSubnet2)
+	subnet_3 := strings.ReplaceAll(subnet_2, "${private_subnet_3}", infraDetailsStatus.PrivateSubnet3)
+	changeCNI := strings.ReplaceAll(subnet_3, "$CNI", cni)
+
+	return changeCNI
+
 }

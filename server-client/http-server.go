@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,13 +17,16 @@ import (
 
 const (
 	url        = "https://localhost:8443"
-	installDir = "/ocpd"
+	installDir = "/ec2-user/cluster"
 )
 
 var (
 	isRegistryHealthy         bool
 	isClusterInstalled        bool
 	healthMutex, clusterMutex sync.Mutex
+	status                    *InfraStatus
+	statusMutex               sync.Mutex
+	agentAction               *DeployDestroy
 )
 
 type InfraStatus struct {
@@ -30,11 +34,16 @@ type InfraStatus struct {
 	ClusterStatus  string
 }
 
+type DeployDestroy struct {
+	ClusterVersion string
+	Deploy         string
+}
+
 func main() {
 
-	// fmt.Println("Sleeping for 3 minutes until the registry initializes")
+	status = &InfraStatus{}
 
-	// time.Sleep(3 * time.Minute)
+	agentAction = &DeployDestroy{}
 
 	fmt.Println("Starting monitoring the deployment")
 
@@ -52,15 +61,16 @@ func agentHTTPServer() {
 	fmt.Println("Starting HTTP agent-server")
 
 	// Here we reply with the status of Registry and Cluster
-	status := &InfraStatus{}
 
 	http.HandleFunc("/status", func(w http.ResponseWriter, req *http.Request) {
-		status.statusHandler(w)
+		statusHandler(w)
 	})
 
-	http.HandleFunc("/deploy", func(w http.ResponseWriter, r *http.Request) {
-		deployHandler(w, r)
+	http.HandleFunc("/data", func(w http.ResponseWriter, r *http.Request) {
+		installConfigHandler(w, r)
 	})
+
+	http.HandleFunc("/action", deployDestroyHandler)
 
 	fmt.Println("Starting HTTP Agent")
 	if err := http.ListenAndServe(":8090", nil); err != nil {
@@ -69,38 +79,36 @@ func agentHTTPServer() {
 
 }
 
-func (s *InfraStatus) setDataInStruct(getHealthStatus bool, getClusterStatus bool) {
+func updateInfraStatus() {
+	statusMutex.Lock()
+	defer statusMutex.Unlock()
 
-	var registry, cluster string
-
-	if getHealthStatus {
-		registry = "Healthy"
-	} else {
-		registry = "Unhealthy"
+	registryHealth := "Unhealthy"
+	if getHealthStatus() {
+		registryHealth = "Healthy"
 	}
 
-	if getClusterStatus {
-		cluster = "Exists"
-	} else {
-		cluster = "DontExist"
+	clusterStatus := "DontExist"
+	if getClusterStatus() {
+		clusterStatus = "Exists"
 	}
 
-	s.RegistryHealth = registry
-	s.ClusterStatus = cluster
-
+	status.RegistryHealth = registryHealth
+	status.ClusterStatus = clusterStatus
 }
 
 // ======================================================================================
 // This is the HTTP handler for requests comming on path /status
 // ======================================================================================
-func (s *InfraStatus) statusHandler(w http.ResponseWriter) {
+func statusHandler(w http.ResponseWriter) {
 
 	// Set the response content type to json
 	w.Header().Set("Content-Type", "application/json")
 
-	s.setDataInStruct(getHealthStatus(), getClusterStatus())
+	statusMutex.Lock()
+	defer statusMutex.Unlock()
 
-	jsonData, err := json.Marshal(s)
+	jsonData, err := json.Marshal(status)
 	if err != nil {
 		// If there is an error in marshaling, send an HTTP error
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -115,7 +123,7 @@ func (s *InfraStatus) statusHandler(w http.ResponseWriter) {
 //This is the HTTP handler for requests comming on path /deploy
 //======================================================================================
 
-func deployHandler(w http.ResponseWriter, r *http.Request) {
+func installConfigHandler(w http.ResponseWriter, r *http.Request) {
 	// Read the request body
 	fmt.Println("Using deployHandler")
 	body, err := io.ReadAll(r.Body)
@@ -194,6 +202,7 @@ func setHealthStatus(health bool) {
 	healthMutex.Lock()
 	isRegistryHealthy = health
 	healthMutex.Unlock()
+	updateInfraStatus()
 }
 
 func getHealthStatus() bool {
@@ -248,6 +257,7 @@ func setClusterStatus(clusterState bool) {
 	clusterMutex.Lock()
 	isClusterInstalled = clusterState
 	clusterMutex.Unlock()
+	updateInfraStatus()
 }
 
 func getClusterStatus() bool {
@@ -259,18 +269,100 @@ func getClusterStatus() bool {
 // ======================================================================================
 // This is to start the openshift installation using the OCP installer
 // ======================================================================================
-func installOrDestroyCluster(destroy bool) {
 
-	var mode string
+func installOrDestroyCluster(action string, clusterVersion string) {
 
-	if destroy {
-		mode = "destroy"
+	if agentAction.Deploy == "Install" && len(agentAction.ClusterVersion) > 0 {
+		populateVersionToInstallerScript(clusterVersion)
+		installCluster()
+	} else if agentAction.Deploy == "Destroy" && len(agentAction.ClusterVersion) == 0 {
+		destroyCluster()
 	} else {
-		mode = "install"
+		fmt.Printf("Invalid combination of actionAndVersion. Action: %s Version: %s", action, clusterVersion)
 	}
 
-	installDestroyCommand := "openshift-install" + "" + mode + "" + "cluster" + "--dir=" + installDir
-	cmd := exec.Command("bash", "-c", installDestroyCommand)
+}
+
+func destroyCluster() {
+
+	fmt.Println("Running the openshift-install destroy command")
+
+	cmd := exec.Command("bash", "-c", "openshift-install destroy cluster --dir", installDir, "--log-level debug")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+}
+
+func installCluster() {
+	fmt.Println("Running the test script as ec2-user")
+
+	cmd := exec.Command("bash", "-c", "/app/cluster-installation-script.sh")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	// Start the command and check for errors
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("Error running script: %v\n", err)
+	} else {
+		fmt.Println("Script executed successfully")
+	}
+
+}
+
+func deployDestroyHandler(w http.ResponseWriter, r *http.Request) {
+	// Read the request body
+	fmt.Println("Using desployDestroyHandler")
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Unable to read actionForAgent request body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	// Unmarshal the JSON data to a generic map
+	fmt.Println("Unmarshal the JSON")
+	err = json.Unmarshal(body, &agentAction)
+	if err != nil {
+		fmt.Println("Unmarshal the JSON error:", err)
+		http.Error(w, "Invalid JSON data actionForAgent", http.StatusBadRequest)
+		return
+	}
+
+	message := fmt.Sprintf("Agent action received and saved successfully. Action is: %s and Version is: %s\n", agentAction.Deploy, agentAction.ClusterVersion)
+
+	// Respond to the client
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(message))
+
+	fmt.Printf("Running go routine to install or destroy the cluster. Action is: %s and Version is: %s\n", agentAction.Deploy, agentAction.ClusterVersion)
+	go installOrDestroyCluster(agentAction.Deploy, agentAction.ClusterVersion)
+}
+
+func populateVersionToInstallerScript(clusterVersion string) {
+
+	// Read the contents of the Terraform template file
+	fmt.Println("Updating the installer script file")
+	scriptContent, err := os.ReadFile("/app/cluster-installation-script.sh")
+	if err != nil {
+		fmt.Println("Cannot read install script file")
+		return
+	}
+
+	//Create the Release channel from the cluster version provided from the user
+	parts := strings.Split(clusterVersion, ".")
+	var clusterReleaseChannnel string
+	if len(parts) >= 2 {
+
+		// Take the first two parts and concatenate "stable-" in front of them
+		clusterReleaseChannnel = "stable-" + parts[0] + "." + parts[1]
+	}
+
+	// Replace the placeholder string with the generated public key path
+	replacedClusterVersion := strings.ReplaceAll(string(scriptContent), "$CLUSTER_VERSION", clusterVersion)
+	replacedChannel := strings.ReplaceAll(string(replacedClusterVersion), "$RELEASE_CHANNEL", clusterReleaseChannnel)
+	err = os.WriteFile("/app/cluster-installation-script.sh", []byte(replacedChannel), 0644)
+	if err != nil {
+		fmt.Println("Cannot write the Installer script file")
+		return
+	}
+
 }

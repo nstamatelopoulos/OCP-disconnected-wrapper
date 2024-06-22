@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"reflect"
 	"strings"
 )
 
@@ -61,22 +60,28 @@ func main() {
 
 	consolidatedFlagCheckFunction(*installFlag, *destroyFlag, *region, *clusterVersion, *initFlag, *helpFlag, *openshiftCNI)
 
-	var installConfig string
-
 	if *installConfigFlag {
-		installConfig = "installConfigCustom" // To make it compile i added this string but this should be changed to allow user edit the default install-config.yaml
-	} else {
-		installConfig = installConfigDefault
+
 	}
 
-	if *addClusterFlag {
-		installCluster(installConfig)
+	if *addClusterFlag && len(*clusterVersion) > 0 {
+		GetInfraDetails()
+		agentRegistryStatus := ClientGetStatus(infraDetailsStatus.InstancePublicDNS)
+		if agentRegistryStatus {
+			applyTerraformConfig(*openshiftCNI)
+			GetInfraDetails()
+			installConfig := populateInstallConfigValues(*openshiftCNI)
+			sendInstallConfigToAgent(installConfig, infraDetailsStatus.InstancePublicDNS)
+			populateActionAndVersion(true, *clusterVersion)
+			sendActionAndVersionToAgent(infraDetailsStatus.InstancePublicDNS)
+		}
 	}
 
 	if *statusFlag {
-		Ec2UrlRaw := GetInfraDetails("InstancePublicDNS")
-		MonitoringDeployment(Ec2UrlRaw)
+		GetInfraDetails()
+		ClientGetStatus(infraDetailsStatus.InstancePublicDNS)
 	}
+
 	// If init flag is used then start interactive prompt to get the paths
 	if *initFlag {
 		initialization(initFileName)
@@ -156,7 +161,8 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 	// Create new PullSecretTemplate
 	createPullSecretTemplate(pullSecretPath)
 	// Update the Bash Script with the provided information from the user.
-	updateBashScript(clusterFlag, clusterVersion, sdnCNI)
+	//updateBashScript(clusterFlag, clusterVersion, sdnCNI)
+	updatePullSecretExperimental()
 	// If cluster flag is used set it to true else set to false in terraform.tfstate file and created it.
 	SetClusterFlagTerraform(clusterFlag)
 	// Replace the appropriate values in registry template terraform file
@@ -175,6 +181,8 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 		log.Fatalf("Failed to execute terraform apply: %v", err)
 	}
 
+	GetInfraDetails()
+	populateInstallConfigValues(sdnCNI)
 }
 
 func destroyRegistry() {
@@ -189,8 +197,53 @@ func destroyRegistry() {
 }
 
 // The updateBashScript function is changes the variables of the bash script template and writes it in a new file.
-func updateBashScript(private bool, clusterVersion string, sdnCNI bool) {
-	// Set hostname to the mirror-registry
+// func updateBashScript(cluster bool, clusterVersion string, sdnCNI bool) {
+// 	// Set hostname to the mirror-registry
+// 	pullSecretContent, err := os.ReadFile(pullSecretTemplate)
+// 	if err != nil {
+// 		println("Cannot read the pull-secret")
+// 	}
+// 	pullSecretTemplateAsString := string(pullSecretContent)
+// 	// Read registry template script file
+// 	scriptContent, err := os.ReadFile(registryScriptTemplate)
+// 	if err != nil {
+// 		println("Cannot read the registry script template file")
+// 	}
+// 	Update the Openshift CNI
+// 	var addCNI string
+// 	if sdnCNI {
+// 		addCNI = strings.ReplaceAll(string(scriptContent), "$CNI", "OpenShiftSDN")
+// 	} else if !sdnCNI {
+// 		addCNI = strings.ReplaceAll(string(scriptContent), "$CNI", "OVNKubernetes")
+// 	}
+// 	Update the variables with their value
+// 	addPullSecret := strings.ReplaceAll(string(scriptContent), "$PULL_SECRET_CONTENT$", pullSecretTemplateAsString)
+// 	If the private flag is true add the cluster variable in the registry script
+// 	if cluster {
+// 		addClusterFlag := strings.ReplaceAll(addPullSecret, "CREATE_CLUSTER=false", "CREATE_CLUSTER=true")
+// 		setClusterVersionVar := strings.ReplaceAll(addClusterFlag, "$PICK_A_VERSION$", clusterVersion)
+// 		Create the Release channel from the cluster version provided from the user
+// 		parts := strings.Split(clusterVersion, ".")
+// 		if len(parts) >= 2 {
+// 			// Take the first two parts and concatenate "stable-" in front of them
+// 			clusterReleaseChannnel := "stable-" + parts[0] + "." + parts[1]
+// 			setReleaseChannel := strings.ReplaceAll(setClusterVersionVar, "$PICK_A_CHANNEL$", clusterReleaseChannnel)
+
+// 			withCluster := os.WriteFile(registryScript, []byte(setReleaseChannel), 0644)
+// 			if withCluster != nil {
+// 				println("Cannot write the cluster variable to the registry script file")
+// 			}
+// 		}
+// 		If the private flag is not true then simply write the file with the default changes
+// 	} else {
+// 		withoutCluster := os.WriteFile(registryScript, []byte(addPullSecret), 0644)
+// 		if withoutCluster != nil {
+// 			println("Cannot write the pull-secret to the registry script file")
+// 		}
+// 	}
+// }
+
+func updatePullSecretExperimental() {
 	pullSecretContent, err := os.ReadFile(pullSecretTemplate)
 	if err != nil {
 		println("Cannot read the pull-secret")
@@ -201,37 +254,12 @@ func updateBashScript(private bool, clusterVersion string, sdnCNI bool) {
 	if err != nil {
 		println("Cannot read the registry script template file")
 	}
-	// Update the Openshift CNI
-	var addCNI string
-	if sdnCNI {
-		addCNI = strings.ReplaceAll(string(scriptContent), "$CNI", "OpenShiftSDN")
-	} else if !sdnCNI {
-		addCNI = strings.ReplaceAll(string(scriptContent), "$CNI", "OVNKubernetes")
-	}
-	// Update the variables with their value
-	addPullSecret := strings.ReplaceAll(string(addCNI), "$PULL_SECRET_CONTENT$", pullSecretTemplateAsString)
-	// If the private flag is true add the cluster variable in the registry script
-	if private {
-		addClusterFlag := strings.ReplaceAll(addPullSecret, "CREATE_CLUSTER=false", "CREATE_CLUSTER=true")
-		setClusterVersionVar := strings.ReplaceAll(addClusterFlag, "$PICK_A_VERSION$", clusterVersion)
-		// Create the Release channel from the cluster version provided from the user
-		parts := strings.Split(clusterVersion, ".")
-		if len(parts) >= 2 {
-			// Take the first two parts and concatenate "stable-" in front of them
-			clusterReleaseChannnel := "stable-" + parts[0] + "." + parts[1]
-			setReleaseChannel := strings.ReplaceAll(setClusterVersionVar, "$PICK_A_CHANNEL$", clusterReleaseChannnel)
 
-			withCluster := os.WriteFile(registryScript, []byte(setReleaseChannel), 0644)
-			if withCluster != nil {
-				println("Cannot write the cluster variable to the registry script file")
-			}
-		}
-		// If the private flag is not true then simply write the file with the default changes
-	} else {
-		withoutCluster := os.WriteFile(registryScript, []byte(addPullSecret), 0644)
-		if withoutCluster != nil {
-			println("Cannot write the pull-secret to the registry script file")
-		}
+	addPullSecret := strings.ReplaceAll(string(scriptContent), "$PULL_SECRET_CONTENT$", pullSecretTemplateAsString)
+
+	withoutCluster := os.WriteFile(registryScript, []byte(addPullSecret), 0644)
+	if withoutCluster != nil {
+		println("Cannot write the pull-secret to the registry script file")
 	}
 }
 
@@ -510,15 +538,15 @@ func initialization(initFile string) {
 // Here we define the struct that will hold the infrastructure details.
 
 type InfraDetails struct {
-	AWSRegion         string `json:"aws_region"`
-	InstancePublicDNS string `json:"instance_public_dns"`
-	PrivateSubnet1    string `json:"private_subnet_1"`
-	PrivateSubnet2    string `json:"private_subnet_2"`
-	PrivateSubnet3    string `json:"private_subnet_3"`
+	AWSRegion         string
+	InstancePublicDNS string
+	PrivateSubnet1    string
+	PrivateSubnet2    string
+	PrivateSubnet3    string
 }
 
 // This functions gets the infrastructure ids from terraform and adds them in the struct InfraDetails for later use from the program
-func GetInfraDetails(detail string) string {
+func GetInfraDetails() {
 
 	initString := "terraform output --raw "
 
@@ -547,23 +575,11 @@ func GetInfraDetails(detail string) string {
 		log.Fatalf("Failed to get private subnet 3: %s\n", err)
 	}
 
-	CurrentinfraDetails := InfraDetails{
-		AWSRegion:         region,
-		InstancePublicDNS: instanceDNS,
-		PrivateSubnet1:    subnet1ID,
-		PrivateSubnet2:    subnet2ID,
-		PrivateSubnet3:    subnet3ID,
-	}
-
-	val := reflect.ValueOf(CurrentinfraDetails)
-	fieldVal := val.FieldByName(detail)
-
-	if fieldVal.IsValid() && fieldVal.Kind() == reflect.String {
-		return fieldVal.String()
-	} else {
-		log.Fatalf("Invalid detail requested: %s\n", detail)
-		return ""
-	}
+	infraDetailsStatus.AWSRegion = region
+	infraDetailsStatus.InstancePublicDNS = instanceDNS
+	infraDetailsStatus.PrivateSubnet1 = subnet1ID
+	infraDetailsStatus.PrivateSubnet2 = subnet2ID
+	infraDetailsStatus.PrivateSubnet3 = subnet3ID
 }
 
 func GetTerraformOutputs(Cmd string) (string, error) {
