@@ -24,6 +24,7 @@ chown ec2-user:ec2-user $homedir/cluster
 
 echo "Installing required packages"
 
+sudo dnf update -y
 sudo yum install wget podman jq unzip -y -q
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" 
 unzip awscliv2.zip
@@ -36,7 +37,7 @@ sudo ./aws/install
 sudo podman run -d --pid=host --network=host \
 --name agent \
 -v /home/ec2-user:/ec2-user \
-quay.io/nstamate/agent:v4.2
+quay.io/nstamate/agent:v5.4
 
 #============================================
 # Downloading and setting up mirror-registry
@@ -85,13 +86,13 @@ echo "Create oc-mirror and cluster workspace directory"
 
 echo "Downloading oc-mirror"
 
-wget -q https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/oc-mirror.tar.gz -P $homedir/mirroring-workspace/
+wget -q https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/latest/oc-mirror.rhel9.tar.gz -P $homedir/mirroring-workspace/
 
-tar -xf $homedir/mirroring-workspace/oc-mirror.tar.gz -C $homedir/mirroring-workspace/
+tar -xf $homedir/mirroring-workspace/oc-mirror.rhel9.tar.gz -C $homedir/mirroring-workspace/
 
 chmod +x $homedir/mirroring-workspace/oc-mirror
 
-mv $homedir/mirroring-workspace/oc-mirror /usr/local/bin
+cp $homedir/mirroring-workspace/oc-mirror /usr/local/bin
 
 echo "Adding the rootCA to the host so registry to be trusted"
 

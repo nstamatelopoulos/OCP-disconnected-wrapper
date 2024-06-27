@@ -20,24 +20,24 @@ const (
 )
 
 var regions = map[string]string{
-	"eu-west-1":      "ami-0f0f1c02e5e4d9d9f",
-	"eu-west-2":      "ami-035c5dc086849b5de",
-	"eu-west-3":      "ami-0460bf124812bebfa",
-	"eu-central-1":   "ami-0e7e134863fac4946",
-	"eu-south-2":     "ami-031b6ef6108761a77",
-	"eu-north-1":     "ami-06a2a41d455060f8b",
-	"us-east-1":      "ami-06640050dc3f556bb",
-	"us-east-2":      "ami-092b43193629811af",
-	"us-west-1":      "ami-0186e3fec9b0283ee",
-	"us-west-2":      "ami-08970fb2e5767e3b8",
-	"ap-south-1":     "ami-05c8ca4485f8b138a",
-	"ap-northeast-3": "ami-044921b7897a7e0da",
-	"ap-northeast-2": "ami-06c568b08b5a431d5",
-	"ap-southeast-1": "ami-051f0947e420652a9",
-	"ap-southeast-2": "ami-0808460885ff81045",
-	"ap-northeast-1": "ami-0f903fb156f24adbf",
-	"ca-central":     "ami-0c3d3a230b9668c02",
-	"sa-east-1":      "ami-0c1b8b886626f940c",
+	"eu-west-1":      "ami-07d4917b6f95f5c2a",
+	"eu-west-2":      "ami-07d1e0a32156d0d21",
+	"eu-west-3":      "ami-0574a94188d1b84a1",
+	"eu-central-1":   "ami-007c3072df8eb6584",
+	"eu-south-2":     "ami-05cdcc0c8c82bd18e",
+	"eu-north-1":     "ami-064983766e6ab3419",
+	"us-east-1":      "ami-0583d8c7a9c35822c",
+	"us-east-2":      "ami-0aa8fc2422063977a",
+	"us-west-1":      "ami-0c5ebd68eb61ff68d",
+	"us-west-2":      "ami-0423fca164888b941",
+	"ap-south-1":     "ami-022ce6f32988af5fa",
+	"ap-northeast-3": "ami-033c6909beae3b794",
+	"ap-northeast-2": "ami-012e764b9ddef07c2",
+	"ap-southeast-1": "ami-0b748249d064044e8",
+	"ap-southeast-2": "ami-086918d8178bfe266",
+	"ap-northeast-1": "ami-04d3ba818c434b384",
+	"ca-central":     "ami-0775d166d9bde92c8",
+	"sa-east-1":      "ami-06dec7e27b4abea7b",
 }
 var pullSecretPath string
 var publicKeyPath string
@@ -53,7 +53,8 @@ func main() {
 	openshiftCNI := flag.Bool("sdn", false, "Use SDN CNI for the cluster instead. OVN is the default")
 	helpFlag := flag.Bool("help", false, "Help")
 	statusFlag := flag.Bool("status", false, "Status of the deployment")
-	addClusterFlag := flag.Bool("addCluster", false, "To deploy a cluster but keep the existing registry")
+	addClusterFlag := flag.Bool("add-cluster", false, "To deploy a cluster but keep the existing registry")
+	destroyClusterFlag := flag.Bool("destroy-Cluster", false, "To destroy the cluster but keep the existing registry")
 	installConfigFlag := flag.Bool("installConfig", false, "Edit the default install-config.yaml")
 
 	flag.Parse()
@@ -74,7 +75,26 @@ func main() {
 			sendInstallConfigToAgent(installConfig, infraDetailsStatus.InstancePublicDNS)
 			populateActionAndVersion(true, *clusterVersion)
 			sendActionAndVersionToAgent(infraDetailsStatus.InstancePublicDNS)
+		} else if agentStatus.ClusterStatus == "Exists" {
+			fmt.Println("There is already an existing cluster installation present and cannot deploy a new one")
+		} else {
+			fmt.Println("Agent or Registry unhealthy")
 		}
+		return
+	}
+
+	if *destroyClusterFlag {
+		GetInfraDetails()
+		agentRegistryStatus := ClientGetStatus(infraDetailsStatus.InstancePublicDNS)
+		if agentRegistryStatus && agentStatus.ClusterStatus == "Exists" {
+			populateActionAndVersion(false, *clusterVersion)
+			sendActionAndVersionToAgent(infraDetailsStatus.InstancePublicDNS)
+		} else if agentStatus.ClusterStatus == "DontExist" {
+			fmt.Println("There is no cluster installation present.")
+		} else {
+			fmt.Println("Agent or Registry unhealthy")
+		}
+		return
 	}
 
 	if *statusFlag {
@@ -543,6 +563,7 @@ type InfraDetails struct {
 	PrivateSubnet1    string
 	PrivateSubnet2    string
 	PrivateSubnet3    string
+	PrivateDNS        string
 }
 
 // This functions gets the infrastructure ids from terraform and adds them in the struct InfraDetails for later use from the program
@@ -575,11 +596,17 @@ func GetInfraDetails() {
 		log.Fatalf("Failed to get private subnet 3: %s\n", err)
 	}
 
+	ec2PrivateDNS, err := GetTerraformOutputs(initString + "ec2_private_hostname")
+	if err != nil {
+		log.Fatalf("Failed to get private DNS: %s\n", err)
+	}
+
 	infraDetailsStatus.AWSRegion = region
 	infraDetailsStatus.InstancePublicDNS = instanceDNS
 	infraDetailsStatus.PrivateSubnet1 = subnet1ID
 	infraDetailsStatus.PrivateSubnet2 = subnet2ID
 	infraDetailsStatus.PrivateSubnet3 = subnet3ID
+	infraDetailsStatus.PrivateDNS = ec2PrivateDNS
 }
 
 func GetTerraformOutputs(Cmd string) (string, error) {

@@ -110,8 +110,8 @@ resource "aws_instance" "mirror-registry" {
   vpc_security_group_ids = [aws_security_group.registry-sg.id]
 
   user_data = templatefile("registry-mirror-script-terraform.tpl", {
-        access_key_id     = var.Create_Cluster ? module.Cluster_Dependencies[0].IAM_User_Access_Key_id : "N/A"
-        access_key_secret = var.Create_Cluster ? module.Cluster_Dependencies[0].IAM_User_Access_key_Secret : "N/A"
+        access_key_id     = aws_iam_access_key.Cluster_deployer_key.id
+        access_key_secret = aws_iam_access_key.Cluster_deployer_key.secret
        })
 
 root_block_device {
@@ -148,7 +148,7 @@ module Cluster_Dependencies {
   Child_Availability_Zone_B = var.Availability_Zone_B
   Child_Availability_Zone_C = var.Availability_Zone_C
   Child_Region = var.Region
-  Child_Random_Suffix = random_string.key_suffix.result
+  #Child_Random_Suffix = random_string.key_suffix.result
 }
 
 
@@ -171,4 +171,6 @@ output "private_subnet_3_id" {
   description = "The ID of the first private subnet"
 }
 
-
+output "ec2_private_hostname" {
+  value = aws_instance.mirror-registry.private_dns
+}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -44,6 +45,15 @@ func main() {
 	status = &InfraStatus{}
 
 	agentAction = &DeployDestroy{}
+
+	// Open a file for logging
+	logFile, err := os.OpenFile("/app/monitoring.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("Failed to open log file: %v", err)
+	}
+	defer logFile.Close()
+
+	log.SetOutput(logFile)
 
 	fmt.Println("Starting monitoring the deployment")
 
@@ -178,18 +188,18 @@ func monitorRegistry(url string) {
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	for {
 
-		fmt.Println("Monitoring remote port...")
+		log.Println("Monitoring remote port...")
 		resp, err := http.Get(url)
 		if err != nil {
-			fmt.Printf("Error making GET request: %s\n", err)
+			log.Printf("Error making GET request: %s\n", err)
 			setHealthStatus(false)
 		} else {
 
 			if resp.StatusCode == http.StatusOK {
-				fmt.Printf("The registry listens to %s\n", url)
+				log.Printf("The registry listens to %s\n", url)
 				setHealthStatus(true)
 			} else if resp.StatusCode != http.StatusOK {
-				fmt.Printf("Received non-200 status code: %d\n", resp.StatusCode)
+				log.Printf("Received non-200 status code: %d\n", resp.StatusCode)
 				setHealthStatus(false)
 			}
 			resp.Body.Close()
@@ -225,25 +235,25 @@ func monitorClusterInstallation(installDir string) {
 		bootstrapFile := installDir + "/" + "terraform.bootstrap.tfstate"
 		clusterFile := installDir + "/" + "terraform.cluster.tfstate"
 
-		fmt.Printf("The path is: %s\n", bootstrapFile)
-		fmt.Printf("The path is: %s\n", clusterFile)
+		log.Printf("The path is: %s\n", bootstrapFile)
+		log.Printf("The path is: %s\n", clusterFile)
 
 		if _, err := os.Stat(bootstrapFile); os.IsNotExist(err) {
-			fmt.Println("No terraform.bootstrap.tfstate file detected.")
+			log.Println("No terraform.bootstrap.tfstate file detected.")
 		} else if err == nil {
 			bootstrapExists = true
-			fmt.Println("Terraform.bootstrap.tfstate file detected.")
+			log.Println("Terraform.bootstrap.tfstate file detected.")
 		}
 
 		if _, err := os.Stat(clusterFile); os.IsNotExist(err) {
-			fmt.Println("No terraform.cluster.tfstate file detected.")
+			log.Println("No terraform.cluster.tfstate file detected.")
 		} else if err == nil {
 			clusterExists = true
-			fmt.Println("Terraform.cluster.tfstate file detected.")
+			log.Println("Terraform.cluster.tfstate file detected.")
 		}
 
 		if bootstrapExists || clusterExists {
-			fmt.Println("At least one Terraform tfstate file detected. There is a cluster installation present")
+			log.Println("At least one Terraform tfstate file detected. There is a cluster installation present")
 			setClusterStatus(true)
 		} else {
 			setClusterStatus(false)
@@ -275,7 +285,8 @@ func installOrDestroyCluster(action string, clusterVersion string) {
 	if agentAction.Deploy == "Install" && len(agentAction.ClusterVersion) > 0 {
 		populateVersionToInstallerScript(clusterVersion)
 		installCluster()
-	} else if agentAction.Deploy == "Destroy" && len(agentAction.ClusterVersion) == 0 {
+	} else if agentAction.Deploy == "Destroy" && len(agentAction.ClusterVersion) == 3 {
+		fmt.Println("Destroying cluster")
 		destroyCluster()
 	} else {
 		fmt.Printf("Invalid combination of actionAndVersion. Action: %s Version: %s", action, clusterVersion)

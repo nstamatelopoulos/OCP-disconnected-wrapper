@@ -1,5 +1,7 @@
 #!/bin/bash 
 
+set -e
+
 #==============================
 echo "Starting Cluster Installation script"
 #==============================
@@ -28,7 +30,7 @@ apiVersion: mirror.openshift.io/v1alpha2
 kind: ImageSetConfiguration
 storageConfig:
   local:
-    path: $homedir/oc-mirror-metadata
+    path: /home/ec2-user/mirroring-workspace/oc-mirror-metadata
 mirror:
   platform:
     channels:
@@ -72,9 +74,10 @@ rm -f $homedir/pull-secret.template
    mkdir $homedir/bin
    echo 'export PATH="/ec2-user/bin:$PATH"' >> $homedir/.bashrc
    source $homedir/.bashrc
+   mv $homedir/mirroring-workspace/oc-mirror /ec2-user/bin
 
    echo "Mirroring release images for version $CLUSTER_VERSION"
-   oc-mirror --config $homedir/mirroring-workspace/imageset-config.yaml docker://$hostname:8443
+   oc-mirror --config $homedir/mirroring-workspace/imageset-config.yaml docker://$hostname:8443 --dest-skip-tls --verbose 1
 
    cd $homedir/cluster
    echo "Downloading openshift-installer for version $CLUSTER_VERSION"

@@ -70,9 +70,9 @@ func ClientGetStatus(url string) bool {
 	//Check the status of the deployment
 	if agentStatus.RegistryHealth == "Healthy" && agentStatus.ClusterStatus == "DontExist" {
 		return true
-	} else if agentStatus.RegistryHealth == "Healthy" && agentStatus.ClusterStatus == "Exist" {
-		fmt.Println("There is already a cluster installation in place. Cannot deploy a new one.")
-		os.Exit(2)
+	} else if agentStatus.RegistryHealth == "Healthy" && agentStatus.ClusterStatus == "Exists" {
+		fmt.Println("There is  a cluster installation in place..")
+		return true
 	} else if agentStatus.ClusterStatus == "Unhealthy" {
 		fmt.Println("The mirror registry is not healthy. Cannot deploy cluster until is fixed.")
 		os.Exit(2)
@@ -207,7 +207,8 @@ func populateInstallConfigValues(sdnFlag bool) string {
 	subnet_2 := strings.ReplaceAll(subnet_1, "${private_subnet_2}", infraDetailsStatus.PrivateSubnet2)
 	subnet_3 := strings.ReplaceAll(subnet_2, "${private_subnet_3}", infraDetailsStatus.PrivateSubnet3)
 	changeCNI := strings.ReplaceAll(subnet_3, "$CNI", cni)
+	changePrivateHostname := strings.ReplaceAll(changeCNI, "$hostname", infraDetailsStatus.PrivateDNS)
 
-	return changeCNI
+	return changePrivateHostname
 
 }

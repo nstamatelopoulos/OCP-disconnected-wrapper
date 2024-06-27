@@ -117,9 +117,9 @@ resource "aws_subnet" "private-3" {
   }
 }
 
-variable Child_Random_Suffix{
-  type = string
-}
+# variable Child_Random_Suffix{
+#   type = string
+# }
 
 variable Child_Availability_Zone_A {
   type = string
