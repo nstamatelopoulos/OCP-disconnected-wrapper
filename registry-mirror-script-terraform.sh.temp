@@ -37,7 +37,7 @@ sudo ./aws/install
 sudo podman run -d --pid=host --network=host \
 --name agent \
 -v /home/ec2-user:/ec2-user \
-quay.io/nstamate/agent:v5.4
+quay.io/nstamate/agent:v6.7
 
 #============================================
 # Downloading and setting up mirror-registry
@@ -56,6 +56,8 @@ echo "Installing mirror-registry"
 sudo ./mirror-registry install --quayHostname=$(hostname) --quayRoot=$homedir/registry-stuff > registry-install.log
 
 echo "Get the password for the registry"
+
+sudo chown -R ec2-user:ec2-user $homedir/registry-stuff/
 
 password=$(cat registry-install.log | grep -o 'credentials (init, [^)]*)' | sed "s/credentials (init, \([^)]*\))/\1/")
 

@@ -46,7 +46,7 @@ func ClientGetStatus(url string) bool {
 	resp, err := http.Get("http://" + url + ":8090/status")
 	if err != nil {
 		log.Println("Error making GET request:", err)
-		os.Exit(3)
+		//os.Exit(3)
 		return false
 	}
 

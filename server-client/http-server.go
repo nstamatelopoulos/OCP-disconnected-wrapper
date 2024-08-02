@@ -301,6 +301,13 @@ func destroyCluster() {
 	cmd := exec.Command("bash", "-c", "openshift-install destroy cluster --dir", installDir, "--log-level debug")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+
+	// Start the command and check for errors
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("Error running openshift-install destroy command: %v\n", err)
+	} else {
+		fmt.Println("openshift-install destroy executed successfully")
+	}
 }
 
 func installCluster() {

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 const (
@@ -184,7 +185,7 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 	//updateBashScript(clusterFlag, clusterVersion, sdnCNI)
 	updatePullSecretExperimental()
 	// If cluster flag is used set it to true else set to false in terraform.tfstate file and created it.
-	SetClusterFlagTerraform(clusterFlag)
+	//SetClusterFlagTerraform(clusterFlag)
 	// Replace the appropriate values in registry template terraform file
 	UpdateCreateTfFileRegistry(publicKeyPath, region, region_ami)
 
@@ -201,8 +202,33 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 		log.Fatalf("Failed to execute terraform apply: %v", err)
 	}
 
-	GetInfraDetails()
-	populateInstallConfigValues(sdnCNI)
+	if clusterFlag {
+		fmt.Println("Sleeping for 5 minutes while waiting for the Registry and Agent to come up")
+		time.Sleep(5 * time.Minute)
+		applyTerraformConfig(sdnCNI)
+		for i := 1; i <= 10; i++ {
+			GetInfraDetails()
+			agentRegistryStatus := ClientGetStatus(infraDetailsStatus.InstancePublicDNS)
+			if agentRegistryStatus && agentStatus.ClusterStatus == "DontExist" {
+				installConfig := populateInstallConfigValues(sdnCNI)
+				sendInstallConfigToAgent(installConfig, infraDetailsStatus.InstancePublicDNS)
+				populateActionAndVersion(true, clusterVersion)
+				sendActionAndVersionToAgent(infraDetailsStatus.InstancePublicDNS)
+				break
+			} else if agentRegistryStatus && agentStatus.ClusterStatus == "Exists" {
+				fmt.Println("There is already a cluster deployed.")
+				break
+			} else if !agentRegistryStatus {
+				fmt.Printf("Try No %v ... Registry is not yet ready. Retrying in 20 seconds", i)
+			}
+			if i == 10 {
+				fmt.Println("The Registry is not up after 10 retries ( 8 minutes). There might be something wrong. Stop retrying")
+			}
+			time.Sleep(10 * time.Second)
+		}
+	} else {
+		fmt.Println("No cluster version specified. Deployed only the registy.")
+	}
 }
 
 func destroyRegistry() {
@@ -353,7 +379,7 @@ func UpdateCreateTfFileRegistry(publicKey string, region string, amiID string) {
 
 	// Read the contents of the Terraform template file
 	fmt.Println("Updating and creating the Registry terraform file")
-	templateContent, err := os.ReadFile("terraform.tfvars")
+	templateContent, err := os.ReadFile("terraform.tfvars.temp")
 	if err != nil {
 		fmt.Println("Cannot read template file")
 		return
