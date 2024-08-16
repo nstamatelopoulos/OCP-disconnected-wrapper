@@ -17,7 +17,6 @@ const (
 	registryScript         = "registry-mirror-script-terraform.tpl"
 	pullSecretTemplate     = "pull-secret.template"
 	initFileName           = "initData.json"
-	installConfigDefault   = "./installConfigDefault.yaml"
 )
 
 var regions = map[string]string{
@@ -57,6 +56,7 @@ func main() {
 	addClusterFlag := flag.Bool("add-cluster", false, "To deploy a cluster but keep the existing registry")
 	destroyClusterFlag := flag.Bool("destroy-Cluster", false, "To destroy the cluster but keep the existing registry")
 	installConfigFlag := flag.Bool("installConfig", false, "Edit the default install-config.yaml")
+	forceFlag := flag.Bool("force", false, "Force destroy the infrastructure if agent is unavailable. (Terraform destroy)")
 
 	flag.Parse()
 
@@ -70,7 +70,7 @@ func main() {
 		GetInfraDetails()
 		agentRegistryStatus := ClientGetStatus(infraDetailsStatus.InstancePublicDNS)
 		if agentRegistryStatus {
-			applyTerraformConfig(*openshiftCNI)
+			applyTerraformConfig()
 			GetInfraDetails()
 			installConfig := populateInstallConfigValues(*openshiftCNI)
 			sendInstallConfigToAgent(installConfig, infraDetailsStatus.InstancePublicDNS)
@@ -148,18 +148,17 @@ func main() {
 		}
 
 		// If destroy flag is used destroy all
-	} else if *destroyFlag {
-		cluster_destroyed := interactiveCLIFunction("Did you destroy the cluster (yes|no)")
-		if cluster_destroyed == "no" {
-			fmt.Println("Please destroy the cluster before you destroy the registry")
-			os.Exit(1)
-		} else if cluster_destroyed == "yes" {
-			fmt.Println("Destroying the registry")
-		} else {
-			fmt.Println("No valid answer. Please type yes or no")
+	} else if *destroyFlag && !*forceFlag {
+		destroyRegistry()
+	} else if *destroyFlag && *forceFlag {
+		fmt.Println("Destroying the infrastructure by running Terraform destroy command")
+		mode := "destroy"
+		terraformErr := runTerraform(mode)
+		if terraformErr != nil {
+			log.Fatalf("Failed to execute terraform destroy: %v", terraformErr)
 			return
 		}
-		destroyRegistry()
+		deleteGeneratedFiles()
 	}
 }
 
@@ -181,11 +180,8 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 
 	// Create new PullSecretTemplate
 	createPullSecretTemplate(pullSecretPath)
-	// Update the Bash Script with the provided information from the user.
-	//updateBashScript(clusterFlag, clusterVersion, sdnCNI)
-	updatePullSecretExperimental()
-	// If cluster flag is used set it to true else set to false in terraform.tfstate file and created it.
-	//SetClusterFlagTerraform(clusterFlag)
+	// Update bash script with Pull Secret provide by the user
+	updatePullSecret()
 	// Replace the appropriate values in registry template terraform file
 	UpdateCreateTfFileRegistry(publicKeyPath, region, region_ami)
 
@@ -205,7 +201,7 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 	if clusterFlag {
 		fmt.Println("Sleeping for 5 minutes while waiting for the Registry and Agent to come up")
 		time.Sleep(5 * time.Minute)
-		applyTerraformConfig(sdnCNI)
+		applyTerraformConfig()
 		for i := 1; i <= 10; i++ {
 			GetInfraDetails()
 			agentRegistryStatus := ClientGetStatus(infraDetailsStatus.InstancePublicDNS)
@@ -227,19 +223,45 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 			time.Sleep(10 * time.Second)
 		}
 	} else {
-		fmt.Println("No cluster version specified. Deployed only the registy.")
+		fmt.Println("No cluster version specified. Deploying only the registy.")
 	}
 }
 
 func destroyRegistry() {
-	// Run the terraform destroy command
-	mode := "destroy"
-	err := runTerraform(mode)
-	if err != nil {
-		log.Fatalf("Failed to execute terraform destroy: %v", err)
-		return
+	GetInfraDetails()
+	agentRegistryStatus := ClientGetStatus(infraDetailsStatus.InstancePublicDNS)
+	if agentStatus.ClusterStatus == "Exists" {
+		populateActionAndVersion(false, "")
+		sendActionAndVersionToAgent(infraDetailsStatus.InstancePublicDNS)
+	} else if agentRegistryStatus && agentStatus.ClusterStatus == "DontExist" {
+		fmt.Println("Cluster does not exist. Destroying only the registry")
 	}
-	deleteGeneratedFiles()
+	for i := 1; i <= 10; i++ {
+		agentRegistryStatus := ClientGetStatus(infraDetailsStatus.InstancePublicDNS)
+		if agentRegistryStatus {
+			if agentStatus.ClusterStatus == "DontExist" {
+				// Run the terraform destroy command
+				fmt.Println("Destroying the infrastructure by running Terraform destroy command")
+				mode := "destroy"
+				terraformErr := runTerraform(mode)
+				if terraformErr != nil {
+					log.Fatalf("Failed to execute terraform destroy: %v", terraformErr)
+					return
+				}
+				deleteGeneratedFiles()
+				break
+			} else if agentStatus.ClusterStatus == "Exists" {
+				fmt.Printf("Try No %v... Cluster is still in destroying state, Re-checking in 2 minutes", i)
+			}
+			if i == 10 {
+				fmt.Println("The Registry is not up after 10 retries ( 8 minutes). There might be something wrong. Stop retrying")
+				break
+			}
+			time.Sleep(2 * time.Minute)
+		}
+
+	}
+	fmt.Println("The infrustructure destroyed successfully")
 }
 
 // The updateBashScript function is changes the variables of the bash script template and writes it in a new file.
@@ -289,7 +311,7 @@ func destroyRegistry() {
 // 	}
 // }
 
-func updatePullSecretExperimental() {
+func updatePullSecret() {
 	pullSecretContent, err := os.ReadFile(pullSecretTemplate)
 	if err != nil {
 		println("Cannot read the pull-secret")
@@ -525,61 +547,65 @@ func initialization(initFile string) {
 	fmt.Printf("Using public-key from file: %v\n", publicKeyPath)
 }
 
-// func checkDeploymentState() {
-// 	// Read the JSON file
-// 	jsonData, err := os.ReadFile("./terraform.tfstate")
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+func checkDeploymentState() (registyStatus bool, clusterStatus bool) {
+	// Read the JSON file
+	jsonData, err := os.ReadFile("./terraform.tfstate")
+	if err != nil {
+		fmt.Println("Probably there is no infrastructure provisioned or terraform.tfstate file is deleted/corrupted.")
+		fmt.Println("Check if there is registry-mirror-script-terraform.tpl file under OCPD dir. If yes there might be orphan resources left to AWS")
+		log.Fatal(err)
 
-// 	// Unmarshal the JSON into an empty interface (map[string]interface{})
-// 	var data map[string]interface{}
-// 	if err := json.Unmarshal(jsonData, &data); err != nil {
-// 		log.Fatal(err)
-// 	}
+	}
 
-// 	// Check if "resources" key exists
-// 	resources, resourcesExist := data["resources"].([]interface{})
-// 	if !resourcesExist {
-// 		log.Fatal("Error: 'resources' key is missing or not an array")
-// 	}
+	// Unmarshal the JSON into an empty interface (map[string]interface{})
+	var data map[string]interface{}
+	if err := json.Unmarshal(jsonData, &data); err != nil {
+		fmt.Println("Probably there is no infrastructure provisioned or terraform.tfstate file is deleted/corrupted.")
+		fmt.Println("Check if there is registry-mirror-script-terraform.tpl file under OCPD dir. If yes there might be orphan resources left to AWS")
+		log.Fatal(err)
 
-// 	// Search for "aws_instance" type
-// 	awsInstanceExists := false
-// 	for _, resource := range resources {
-// 		if res, ok := resource.(map[string]interface{}); ok {
-// 			if resType, typeExist := res["type"].(string); typeExist && resType == "aws_instance" {
-// 				awsInstanceExists = true
-// 				break
-// 			}
-// 		}
-// 	}
+	}
 
-// 	// Search for "aws_iam_user" type
-// 	awsUserExists := false
-// 	for _, resource := range resources {
-// 		if res, ok := resource.(map[string]interface{}); ok {
-// 			if resType, typeExist := res["type"].(string); typeExist && resType == "aws_iam_user" {
-// 				awsUserExists = true
-// 				break
-// 			}
-// 		}
-// 	}
+	// Check if "resources" key exists
+	resources, resourcesExist := data["resources"].([]interface{})
+	if !resourcesExist {
+		log.Fatal("Error: 'resources' key is missing or not an array")
+	}
 
-// 	// Check what resources exist.
-// 	if awsInstanceExists && awsUserExists {
-// 		fmt.Println("There is already infrastructure present. You cannot deploy new infrastructure before destroy the current one")
-// 		clusterInfo := "Already installed mirror registry and cluster"
-// 		fmt.Println(clusterInfo)
-// 		os.Exit(1)
-// 	} else if awsInstanceExists {
-// 		fmt.Println("There is already infrastructure present. You cannot deploy new infrastructure before destroy the current one")
-// 		clusterInfo := "Already installed mirror registry"
-// 		fmt.Println(clusterInfo)
-// 		os.Exit(1)
-// 	}
+	// Search for "aws_instance" type
+	awsInstanceExists := false
+	for _, resource := range resources {
+		if res, ok := resource.(map[string]interface{}); ok {
+			if resType, typeExist := res["type"].(string); typeExist && resType == "aws_instance" {
+				awsInstanceExists = true
+				break
+			}
+		}
+	}
 
-// }
+	// Search for "aws_iam_user" type
+	enpointsExists := false
+	for _, resource := range resources {
+		if res, ok := resource.(map[string]interface{}); ok {
+			if resType, typeExist := res["type"].(string); typeExist && resType == "aws_vpc_endpoint" {
+				enpointsExists = true
+				break
+			}
+		}
+	}
+
+	// Check what resources exist.
+	if awsInstanceExists && enpointsExists {
+		fmt.Println("There is infrastructure present.Already installed mirror registry and cluster")
+		return true, true
+	} else if awsInstanceExists {
+		fmt.Println("There is infrastructure present. Already installed mirror registry")
+		return true, false
+	} else {
+		fmt.Println("There is no infrastructure provisioned")
+		return false, false
+	}
+}
 
 // Here we define the struct that will hold the infrastructure details.
 

@@ -46,8 +46,9 @@ func ClientGetStatus(url string) bool {
 	resp, err := http.Get("http://" + url + ":8090/status")
 	if err != nil {
 		log.Println("Error making GET request:", err)
-		//os.Exit(3)
-		return false
+		fmt.Println("")
+		agentIsDown(err)
+		os.Exit(2)
 	}
 
 	defer resp.Body.Close()
@@ -56,13 +57,17 @@ func ClientGetStatus(url string) bool {
 	if err != nil {
 		log.Println("Error reading response body:", err)
 		time.Sleep(5 * time.Second)
-		return false
+		fmt.Println("")
+		agentIsDown(err)
+		os.Exit(2)
 	}
 
 	if err := json.Unmarshal(body, agentStatus); err != nil {
 		fmt.Printf("error Unmarshaling JSON: %v\n", err)
 		time.Sleep(5 * time.Second)
-		return false
+		fmt.Println("")
+		agentIsDown(err)
+		os.Exit(2)
 	}
 
 	fmt.Println("InfraState: ", agentStatus)
@@ -71,13 +76,27 @@ func ClientGetStatus(url string) bool {
 	if agentStatus.RegistryHealth == "Healthy" && agentStatus.ClusterStatus == "DontExist" {
 		return true
 	} else if agentStatus.RegistryHealth == "Healthy" && agentStatus.ClusterStatus == "Exists" {
-		fmt.Println("There is  a cluster installation in place..")
+		fmt.Println("There is a cluster installation in place..")
 		return true
-	} else if agentStatus.ClusterStatus == "Unhealthy" {
-		fmt.Println("The mirror registry is not healthy. Cannot deploy cluster until is fixed.")
-		os.Exit(2)
+	} else if agentStatus.RegistryHealth == "Unhealthy" {
+		fmt.Println("The mirror registry is not healthy yet")
+		return true
 	}
+
 	return false
+}
+
+func agentIsDown(clientError error) {
+
+	registryExists, clusterExists := checkDeploymentState()
+
+	fmt.Printf("--> The agent is unavailable with error %v.\n", clientError)
+	if registryExists && clusterExists {
+		fmt.Println("--> Login to the EC2 instance and see if there is a cluster provisioned under /home/ec2-user/cluster install dir and destroy it manually, as agent is unavailable to avoid leaving orphan resources running on AWS")
+		fmt.Println("--> To destroy the cluster run 'openshift-install destroy cluster --dir /home/ec2-user/cluster' command on the EC2 instance")
+	} else if registryExists && !clusterExists {
+		fmt.Println("--> There is a provisioned mirror-registry EC2 instance. Use --force flag along with the --destroy flag to destroy it along with the rest of the infrastructure")
+	}
 }
 
 func sendInstallConfigToAgent(installconfig string, url string) {
@@ -149,7 +168,7 @@ func populateActionAndVersion(action bool, version string) {
 //Check the status of the deployment
 //======================================================================================
 
-func applyTerraformConfig(CNIFlag bool) {
+func applyTerraformConfig() {
 
 	//======================================================================================
 	//The below is the deployment of the Terraform part of the infrastructure.

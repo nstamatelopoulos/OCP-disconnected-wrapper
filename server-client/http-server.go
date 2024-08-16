@@ -298,7 +298,12 @@ func destroyCluster() {
 
 	fmt.Println("Running the openshift-install destroy command")
 
-	cmd := exec.Command("bash", "-c", "openshift-install destroy cluster --dir", installDir, "--log-level debug")
+	cmdStr := `echo 'export PATH="/ec2-user/bin:$PATH"' >> $HOME/.bashrc && \
+	echo 'export AWS_SHARED_CREDENTIALS_FILE=/ec2-user/.aws/credentials' >> $HOME/.bashrc && \
+	source $HOME/.bashrc && \
+	openshift-install destroy cluster --dir "` + installDir + `" --log-level debug`
+
+	cmd := exec.Command("bash", "-c", cmdStr)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 

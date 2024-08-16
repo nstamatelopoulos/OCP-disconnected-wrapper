@@ -96,12 +96,13 @@ if ! [ -d $homedir/bin ]; then
   source $homedir/.bashrc
   mv $homedir/mirroring-workspace/oc-mirror /ec2-user/bin
 else
-  echo "$homedir/bin directory already exists"
+  echo "$homedir/bin directory already exists. Sourcing the .bashrc"
+  source $homedir/.bashrc
 fi
 
 echo "Copying the pull-secret to home folder of container user"
 
-if ! [ -f /home/ec2-user/.docker ]; then
+if ! [ -d /home/ec2-user/.docker ]; then
   mkdir /home/ec2-user/.docker
   cp $homedir/.docker/config.json /home/ec2-user/.docker/config.json
 else
