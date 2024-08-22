@@ -33,7 +33,7 @@ resource "aws_iam_user_policy" "Installer_policy_document" {
       "iam:SimulatePrincipalPolicy",
       "iam:TagRole",
       "iam:CreateServiceLinkedRole",
-      "iam:TagInstanceProfile".
+      "iam:TagInstanceProfile",
       "route53:ChangeResourceRecordSets",
       "route53:ChangeTagsForResource",
       "route53:CreateHostedZone",
