@@ -54,17 +54,13 @@ func main() {
 	helpFlag := flag.Bool("help", false, "Help")
 	statusFlag := flag.Bool("status", false, "Status of the deployment")
 	addClusterFlag := flag.Bool("add-cluster", false, "To deploy a cluster but keep the existing registry")
-	destroyClusterFlag := flag.Bool("destroy-Cluster", false, "To destroy the cluster but keep the existing registry")
-	installConfigFlag := flag.Bool("installConfig", false, "Edit the default install-config.yaml")
+	destroyClusterFlag := flag.Bool("destroy-cluster", false, "To destroy the cluster but keep the existing registry")
+	installConfigFlag := flag.Bool("custom-install-config", false, "Edit the default install-config.yaml")
 	forceFlag := flag.Bool("force", false, "Force destroy the infrastructure if agent is unavailable. (Terraform destroy)")
 
 	flag.Parse()
 
-	consolidatedFlagCheckFunction(*installFlag, *destroyFlag, *region, *clusterVersion, *initFlag, *helpFlag, *openshiftCNI)
-
-	if *installConfigFlag {
-
-	}
+	consolidatedFlagCheckFunction(*installFlag, *destroyFlag, *region, *clusterVersion, *initFlag, *helpFlag, *openshiftCNI, *destroyClusterFlag, *addClusterFlag, *installConfigFlag, *forceFlag)
 
 	if *addClusterFlag && len(*clusterVersion) > 0 {
 		GetInfraDetails()
@@ -72,7 +68,7 @@ func main() {
 		if agentRegistryStatus {
 			applyTerraformConfig()
 			GetInfraDetails()
-			installConfig := populateInstallConfigValues(*openshiftCNI)
+			installConfig := populateInstallConfigValues(*openshiftCNI, *installConfigFlag)
 			sendInstallConfigToAgent(installConfig, infraDetailsStatus.InstancePublicDNS)
 			populateActionAndVersion(true, *clusterVersion)
 			sendActionAndVersionToAgent(infraDetailsStatus.InstancePublicDNS)
@@ -141,10 +137,10 @@ func main() {
 		pullSecretPath, publicKeyPath = readPathsFromFile(initFileName)
 		if len(*clusterVersion) > 0 {
 			clusterFlag := true
-			installRegistry(clusterFlag, pullSecretPath, publicKeyPath, *region, amiID, *clusterVersion, *openshiftCNI)
+			installRegistry(clusterFlag, pullSecretPath, publicKeyPath, *region, amiID, *clusterVersion, *openshiftCNI, *installConfigFlag)
 		} else {
 			clusterFlag := false
-			installRegistry(clusterFlag, pullSecretPath, publicKeyPath, *region, amiID, *clusterVersion, *openshiftCNI)
+			installRegistry(clusterFlag, pullSecretPath, publicKeyPath, *region, amiID, *clusterVersion, *openshiftCNI, *installConfigFlag)
 		}
 
 		// If destroy flag is used destroy all
@@ -176,7 +172,7 @@ func runTerraform(mode string) error {
 	return nil
 }
 
-func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath string, region string, region_ami string, clusterVersion string, sdnCNI bool) {
+func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath string, region string, region_ami string, clusterVersion string, sdnCNI bool, installConfigFlag bool) {
 
 	// Create new PullSecretTemplate
 	createPullSecretTemplate(pullSecretPath)
@@ -206,7 +202,7 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 			GetInfraDetails()
 			agentRegistryStatus := ClientGetStatus(infraDetailsStatus.InstancePublicDNS)
 			if agentRegistryStatus && agentStatus.ClusterStatus == "DontExist" {
-				installConfig := populateInstallConfigValues(sdnCNI)
+				installConfig := populateInstallConfigValues(sdnCNI, installConfigFlag)
 				sendInstallConfigToAgent(installConfig, infraDetailsStatus.InstancePublicDNS)
 				populateActionAndVersion(true, clusterVersion)
 				sendActionAndVersionToAgent(infraDetailsStatus.InstancePublicDNS)
@@ -251,7 +247,7 @@ func destroyRegistry() {
 				deleteGeneratedFiles()
 				break
 			} else if agentStatus.ClusterStatus == "Exists" {
-				fmt.Printf("Try No %v... Cluster is still in destroying state, Re-checking in 2 minutes", i)
+				fmt.Printf("Try No %v... Cluster is still in destroying state, Re-checking in 2 minutes\n", i)
 			}
 			if i == 10 {
 				fmt.Println("The Registry is not up after 10 retries ( 8 minutes). There might be something wrong. Stop retrying")
@@ -263,53 +259,6 @@ func destroyRegistry() {
 	}
 	fmt.Println("The infrustructure destroyed successfully")
 }
-
-// The updateBashScript function is changes the variables of the bash script template and writes it in a new file.
-// func updateBashScript(cluster bool, clusterVersion string, sdnCNI bool) {
-// 	// Set hostname to the mirror-registry
-// 	pullSecretContent, err := os.ReadFile(pullSecretTemplate)
-// 	if err != nil {
-// 		println("Cannot read the pull-secret")
-// 	}
-// 	pullSecretTemplateAsString := string(pullSecretContent)
-// 	// Read registry template script file
-// 	scriptContent, err := os.ReadFile(registryScriptTemplate)
-// 	if err != nil {
-// 		println("Cannot read the registry script template file")
-// 	}
-// 	Update the Openshift CNI
-// 	var addCNI string
-// 	if sdnCNI {
-// 		addCNI = strings.ReplaceAll(string(scriptContent), "$CNI", "OpenShiftSDN")
-// 	} else if !sdnCNI {
-// 		addCNI = strings.ReplaceAll(string(scriptContent), "$CNI", "OVNKubernetes")
-// 	}
-// 	Update the variables with their value
-// 	addPullSecret := strings.ReplaceAll(string(scriptContent), "$PULL_SECRET_CONTENT$", pullSecretTemplateAsString)
-// 	If the private flag is true add the cluster variable in the registry script
-// 	if cluster {
-// 		addClusterFlag := strings.ReplaceAll(addPullSecret, "CREATE_CLUSTER=false", "CREATE_CLUSTER=true")
-// 		setClusterVersionVar := strings.ReplaceAll(addClusterFlag, "$PICK_A_VERSION$", clusterVersion)
-// 		Create the Release channel from the cluster version provided from the user
-// 		parts := strings.Split(clusterVersion, ".")
-// 		if len(parts) >= 2 {
-// 			// Take the first two parts and concatenate "stable-" in front of them
-// 			clusterReleaseChannnel := "stable-" + parts[0] + "." + parts[1]
-// 			setReleaseChannel := strings.ReplaceAll(setClusterVersionVar, "$PICK_A_CHANNEL$", clusterReleaseChannnel)
-
-// 			withCluster := os.WriteFile(registryScript, []byte(setReleaseChannel), 0644)
-// 			if withCluster != nil {
-// 				println("Cannot write the cluster variable to the registry script file")
-// 			}
-// 		}
-// 		If the private flag is not true then simply write the file with the default changes
-// 	} else {
-// 		withoutCluster := os.WriteFile(registryScript, []byte(addPullSecret), 0644)
-// 		if withoutCluster != nil {
-// 			println("Cannot write the pull-secret to the registry script file")
-// 		}
-// 	}
-// }
 
 func updatePullSecret() {
 	pullSecretContent, err := os.ReadFile(pullSecretTemplate)

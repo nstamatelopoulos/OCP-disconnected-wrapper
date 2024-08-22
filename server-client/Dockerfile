@@ -29,7 +29,7 @@ RUN groupadd -g 1000 ec2-user && \
 
 COPY --from=builder /app/agent /app/agent
 
-COPY cluster-installation-script.sh /app
+COPY cluster-installation-script.sh.template /app
 
 RUN chown -R ec2-user:ec2-user /app
 

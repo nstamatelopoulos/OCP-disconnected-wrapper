@@ -37,7 +37,7 @@ sudo ./aws/install
 sudo podman run -d --pid=host --network=host \
 --name agent \
 -v /home/ec2-user:/ec2-user \
-quay.io/nstamate/agent:v7.2
+quay.io/nstamate/agent:v7.9
 
 #============================================
 # Downloading and setting up mirror-registry

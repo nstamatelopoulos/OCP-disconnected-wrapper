@@ -301,7 +301,12 @@ func destroyCluster() {
 	cmdStr := `echo 'export PATH="/ec2-user/bin:$PATH"' >> $HOME/.bashrc && \
 	echo 'export AWS_SHARED_CREDENTIALS_FILE=/ec2-user/.aws/credentials' >> $HOME/.bashrc && \
 	source $HOME/.bashrc && \
-	openshift-install destroy cluster --dir "` + installDir + `" --log-level debug`
+	openshift-install destroy cluster --dir "` + installDir + `" --log-level debug && \
+	rm -rf /ec2-user/bin/openshift-install && \
+	rm -rf /ec2-user/bin/oc && \
+	rm -rf /ec2-user/mirroring-workspace/imageset-config.yaml && \
+	rm -rf /app/cluster-installation-script.sh && \
+	rm -rf /ec2-user/cluster/.openshift_install.log`
 
 	cmd := exec.Command("bash", "-c", cmdStr)
 	cmd.Stdout = os.Stdout
@@ -316,9 +321,11 @@ func destroyCluster() {
 }
 
 func installCluster() {
-	fmt.Println("Running the test script as ec2-user")
+	fmt.Println("Running the installation script as ec2-user")
 
-	cmd := exec.Command("bash", "-c", "/app/cluster-installation-script.sh")
+	cmdStr := `chmod +x /app/cluster-installation-script.sh && /app/cluster-installation-script.sh`
+
+	cmd := exec.Command("bash", "-c", cmdStr)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -364,7 +371,7 @@ func populateVersionToInstallerScript(clusterVersion string) {
 
 	// Read the contents of the Terraform template file
 	fmt.Println("Updating the installer script file")
-	scriptContent, err := os.ReadFile("/app/cluster-installation-script.sh")
+	scriptContent, err := os.ReadFile("/app/cluster-installation-script.sh.template")
 	if err != nil {
 		fmt.Println("Cannot read install script file")
 		return

@@ -12,6 +12,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 var agentStatus *InfraState
@@ -70,16 +72,17 @@ func ClientGetStatus(url string) bool {
 		os.Exit(2)
 	}
 
-	fmt.Println("InfraState: ", agentStatus)
+	//fmt.Println("InfraState: ", agentStatus)
 
 	//Check the status of the deployment
 	if agentStatus.RegistryHealth == "Healthy" && agentStatus.ClusterStatus == "DontExist" {
+		fmt.Println("Registry is Healthy but cluster does not exist")
 		return true
 	} else if agentStatus.RegistryHealth == "Healthy" && agentStatus.ClusterStatus == "Exists" {
-		fmt.Println("There is a cluster installation in place..")
+		fmt.Println("Registry is Healthy and there is a cluster installation in place.")
 		return true
 	} else if agentStatus.RegistryHealth == "Unhealthy" {
-		fmt.Println("The mirror registry is not healthy yet")
+		fmt.Println("The mirror registry is not healthy")
 		return true
 	}
 
@@ -204,15 +207,41 @@ func applyTerraformConfig() {
 
 }
 
-func populateInstallConfigValues(sdnFlag bool) string {
+func populateInstallConfigValues(sdnFlag bool, installConfigFlag bool) string {
 
-	installConfig := `{"apiVersion":"v1","baseDomain":"emea.aws.cee.support","credentialsMode":"Passthrough","compute":[{"architecture":"amd64","hyperthreading":"Enabled","name":"worker","platform":{},"replicas":3}],"controlPlane":{"architecture":"amd64","hyperthreading":"Enabled","name":"master","platform":{},"replicas":3},"metadata":{"creationTimestamp":null,"name":"disconnected-$RANDOM_VALUE"},"networking":{"clusterNetwork":[{"cidr":"10.128.0.0/14","hostPrefix":23}],"machineNetwork":[{"cidr":"10.0.0.32/27"},{"cidr":"10.0.0.64/27"},{"cidr":"10.0.0.96/27"}],"networkType":"$CNI","serviceNetwork":["172.30.0.0/16"]},"platform":{"aws":{"region":"${region}","subnets":["${private_subnet_1}","${private_subnet_2}","${private_subnet_3}"]}},"publish":"Internal","imageContentSources":[{"mirrors":["$hostname:8443/openshift/release"],"source":"quay.io/openshift-release-dev/ocp-v4.0-art-dev"},{"mirrors":["$hostname:8443/openshift/release-images"],"source":"quay.io/openshift-release-dev/ocp-release"}]}`
+	fmt.Println("Populating the install-config.yaml with the required infrastructure details")
+	var installConfig string
+	var cni string
 
+	// If the installConfig flag is appended then read the custom-install-config.yaml file provided by the user and populate this instead the default.
+	if installConfigFlag {
+		fmt.Println("Custom install-config.yaml detected. Populating it with the required infrastructure details")
+		customInstallconfig, err := os.ReadFile("./install-config.yaml")
+		if err != nil {
+			println("Cannot read the pull-secret")
+		}
+
+		var data map[string]interface{}
+		err = yaml.Unmarshal(customInstallconfig, &data)
+		if err != nil {
+			log.Fatalf("Error unmarshaling YAML: %v", err)
+		}
+
+		// Marshal the map into JSON
+		installConfigJson, err := json.Marshal(data)
+		if err != nil {
+			log.Fatalf("Error marshaling to JSON: %v", err)
+		}
+
+		// Step 4: Convert JSON bytes to string
+		installConfig = string(installConfigJson)
+
+	} else if !installConfigFlag {
+		installConfig = `{"apiVersion":"v1","baseDomain":"emea.aws.cee.support","credentialsMode":"Passthrough","compute":[{"architecture":"amd64","hyperthreading":"Enabled","name":"worker","platform":{},"replicas":0}],"controlPlane":{"architecture":"amd64","hyperthreading":"Enabled","name":"master","platform":{},"replicas":1},"metadata":{"name":"disconnected-$RANDOM_VALUE"},"networking":{"clusterNetwork":[{"cidr":"10.128.0.0/14","hostPrefix":23}],"machineNetwork":[{"cidr":"10.0.0.32/27"},{"cidr":"10.0.0.64/27"},{"cidr":"10.0.0.96/27"}],"networkType":"$CNI","serviceNetwork":["172.30.0.0/16"]},"platform":{"aws":{"region":"${region}","subnets":["${private_subnet_1}","${private_subnet_2}","${private_subnet_3}"]}},"publish":"Internal","imageContentSources":[{"mirrors":["$hostname:8443/openshift/release"],"source":"quay.io/openshift-release-dev/ocp-v4.0-art-dev"},{"mirrors":["$hostname:8443/openshift/release-images"],"source":"quay.io/openshift-release-dev/ocp-release"}]}`
+	}
 	randomValue := rand.Intn(99999-10000+1) + 10000
 
 	randomValueStr := fmt.Sprintf("%d", randomValue)
-
-	var cni string
 
 	if sdnFlag {
 		cni = "OpenShiftSDN"
@@ -227,6 +256,8 @@ func populateInstallConfigValues(sdnFlag bool) string {
 	subnet_3 := strings.ReplaceAll(subnet_2, "${private_subnet_3}", infraDetailsStatus.PrivateSubnet3)
 	changeCNI := strings.ReplaceAll(subnet_3, "$CNI", cni)
 	changePrivateHostname := strings.ReplaceAll(changeCNI, "$hostname", infraDetailsStatus.PrivateDNS)
+
+	fmt.Println("Install-config populated")
 
 	return changePrivateHostname
 
