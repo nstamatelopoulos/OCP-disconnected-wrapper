@@ -89,10 +89,13 @@ openssl req -new -key $SERVER_KEY -out $SERVER_CSR \
     -addext "subjectAltName=DNS:$SERVER_CN"
 
 # Sign the CSR with the CA to create the server certificate
-openssl x509 -req -in $SERVER_CSR -CA $CA_CERT -CAkey $CA_KEY -CAcreateserial -out $SERVER_CERT -days $DAYS_VALID -sha256
+openssl x509 -req -in $SERVER_CSR -CA $CA_CERT -CAkey $CA_KEY -CAcreateserial -out $SERVER_CERT -days $DAYS_VALID -sha256 \
+    -extfile <(printf "subjectAltName=DNS:$SERVER_CN")
 
 # Verify the server certificate
 openssl x509 -in $SERVER_CERT -text -noout
+
+chown -R ec2-user:ec2-user $homedir/certs/
 
 #============================================
 # Setting up the agent container
@@ -101,7 +104,7 @@ openssl x509 -in $SERVER_CERT -text -noout
 sudo podman run -d --pid=host --network=host \
 --name agent \
 -v /home/ec2-user:/ec2-user \
-quay.io/nstamate/agent:v8.9
+quay.io/nstamate/agent:v9.0
 
 #============================================
 # Downloading and setting up mirror-registry

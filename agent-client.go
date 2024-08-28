@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
@@ -48,11 +49,17 @@ type InfraState struct {
 
 // Function to get the client status using HTTP. It expects a reply from the server-agent.
 func ClientGetStatus(url string) bool {
+	// Create the Client using the CAcert.pem file so can verify the agent TLS cert.
+	client, err := createHTTPClientWithCACert(CAcert)
+	if err != nil {
+		fmt.Printf("Error creating HTTP client: %v\n", err)
+		return false
+	}
 
 	fmt.Println("Status Get Request...")
 
 	// Create a new GET request
-	req, err := http.NewRequest("GET", "http://"+url+":8090/status", nil)
+	req, err := http.NewRequest("GET", "https://"+url+":8090/status", nil)
 	if err != nil {
 		log.Println("Error creating GET request:", err)
 		fmt.Println("")
@@ -66,7 +73,6 @@ func ClientGetStatus(url string) bool {
 	fmt.Printf("The Token is %v\n", infraDetailsStatus.Token)
 
 	// Send the request using an HTTP client
-	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Println("Error making GET request:", err)
@@ -131,11 +137,17 @@ func agentIsDown(clientError error) {
 
 func sendInstallConfigToAgent(installconfig string, url string) {
 
+	// Create the Client using the CAcert.pem file so can verify the agent TLS cert.
+	client, err := createHTTPClientWithCACert(CAcert)
+	if err != nil {
+		fmt.Printf("Error creating HTTP client: %v\n", err)
+		return
+	}
 	// Convert the installconfig string to a byte buffer
 	requestBody := bytes.NewBuffer([]byte(installconfig))
 
 	// Create a new POST request
-	req, err := http.NewRequest("POST", "http://"+url+":8090/data", requestBody)
+	req, err := http.NewRequest("POST", "https://"+url+":8090/data", requestBody)
 	if err != nil {
 		log.Fatalf("Error creating POST request: %v", err)
 	}
@@ -147,7 +159,6 @@ func sendInstallConfigToAgent(installconfig string, url string) {
 	fmt.Printf("The Token is %v\n", infraDetailsStatus.Token)
 
 	// Send the request using an HTTP client
-	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Fatalf("Error sending POST request: %v", err)
@@ -170,6 +181,12 @@ func sendInstallConfigToAgent(installconfig string, url string) {
 
 func sendActionAndVersionToAgent(url string) {
 
+	// Create the Client using the CAcert.pem file so can verify the agent TLS cert.
+	client, err := createHTTPClientWithCACert(CAcert)
+	if err != nil {
+		fmt.Printf("Error creating HTTP client: %v\n", err)
+		return
+	}
 	actionForAgent, err := json.Marshal(agentAction)
 	if err != nil {
 		// If there is an error in marshaling print the error
@@ -178,7 +195,7 @@ func sendActionAndVersionToAgent(url string) {
 	}
 	// Send the JSON data to the server
 	fmt.Println("Sending actionForAgent using Post request")
-	req, err := http.NewRequest("POST", "http://"+url+":8090/action", bytes.NewBuffer(actionForAgent))
+	req, err := http.NewRequest("POST", "https://"+url+":8090/action", bytes.NewBuffer(actionForAgent))
 	if err != nil {
 		fmt.Println("Error creating actionForAgent request:", err)
 		return
@@ -189,7 +206,6 @@ func sendActionAndVersionToAgent(url string) {
 	fmt.Printf("The Token is %v\n", infraDetailsStatus.Token)
 
 	// Send the request
-	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Println("Error sending request actionForAgent:", err)
@@ -298,7 +314,6 @@ func populateInstallConfigValues(sdnFlag bool, installConfigFlag bool) string {
 	} else if !installConfigFlag {
 		installConfig = `{"apiVersion":"v1","baseDomain":"emea.aws.cee.support","credentialsMode":"Passthrough","compute":[{"architecture":"amd64","hyperthreading":"Enabled","name":"worker","platform":{},"replicas":0}],"controlPlane":{"architecture":"amd64","hyperthreading":"Enabled","name":"master","platform":{},"replicas":1},"metadata":{"name":"disconnected-$RANDOM_VALUE"},"networking":{"clusterNetwork":[{"cidr":"10.128.0.0/14","hostPrefix":23}],"machineNetwork":[{"cidr":"10.0.0.32/27"},{"cidr":"10.0.0.64/27"},{"cidr":"10.0.0.96/27"}],"networkType":"$CNI","serviceNetwork":["172.30.0.0/16"]},"platform":{"aws":{"region":"${region}","subnets":["${private_subnet_1}","${private_subnet_2}","${private_subnet_3}"]}},"publish":"Internal","imageContentSources":[{"mirrors":["$hostname:8443/openshift/release"],"source":"quay.io/openshift-release-dev/ocp-v4.0-art-dev"},{"mirrors":["$hostname:8443/openshift/release-images"],"source":"quay.io/openshift-release-dev/ocp-release"}]}`
 	}
-	//randomValue := rand.Intn(99999-10000+1) + 10000
 
 	// Calculate the range
 	rangeValue := big.NewInt(int64(99999 - 10000 + 1))
@@ -382,5 +397,46 @@ func createCertificateAuthority() (string, string, error) {
 	certPem := strings.TrimSpace(certPEM.String())
 	keyPem := strings.TrimSpace(keyPEM.String())
 
+	//Create the CA file also localy so it can be used from the client to communicate with the agent.
+	file, err := os.Create(CAcert)
+	if err != nil {
+		fmt.Printf("failed to create file CAcert.pem: %v\n", err)
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(certPem)
+	if err != nil {
+		fmt.Printf("failed to create file CAcert.pem: %v\n", err)
+	}
+	// Return the CA and key in strings to be injected in the EC2 instance.
 	return certPem, keyPem, nil
+}
+
+func createHTTPClientWithCACert(caCertPath string) (*http.Client, error) {
+	// Load CA cert
+	caCert, err := os.ReadFile(caCertPath)
+	if err != nil {
+		return nil, fmt.Errorf("error reading CA certificate: %v", err)
+	}
+
+	// Create a CA certificate pool and add the CA cert to it
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+
+	// Create a TLS config with the CA pool
+	tlsConfig := &tls.Config{
+		RootCAs: caCertPool,
+	}
+
+	// Create a transport that uses the TLS config
+	transport := &http.Transport{
+		TLSClientConfig: tlsConfig,
+	}
+
+	// Create an HTTP client that uses the transport
+	client := &http.Client{
+		Transport: transport,
+	}
+
+	return client, nil
 }

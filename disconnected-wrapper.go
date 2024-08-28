@@ -17,6 +17,7 @@ const (
 	registryScript         = "registry-mirror-script-terraform.tpl"
 	pullSecretTemplate     = "pull-secret.template"
 	initFileName           = "initData.json"
+	CAcert                 = "CAcert.pem"
 )
 
 var regions = map[string]string{
@@ -292,6 +293,7 @@ func deleteGeneratedFiles() {
 	PullSecretTemp := os.Remove(pullSecretTemplate)
 	os.Remove("terraform.tfvars")
 	os.Remove("infra_details.json")
+	os.Remove(CAcert)
 
 	if Script != nil || PullSecretTemp != nil {
 		return
