@@ -70,7 +70,7 @@ func ClientGetStatus(url string) bool {
 	// Set the X-Auth-Token header with the desired value
 	req.Header.Set("X-Auth-Token", infraDetailsStatus.Token)
 
-	fmt.Printf("The Token is %v\n", infraDetailsStatus.Token)
+	//fmt.Printf("The Token is %v\n", infraDetailsStatus.Token)
 
 	// Send the request using an HTTP client
 	resp, err := client.Do(req)
@@ -405,12 +405,15 @@ func createCertificateAuthority() (string, string, error) {
 	file, err := os.Create(CAcert)
 	if err != nil {
 		fmt.Printf("failed to create file CAcert.pem: %v\n", err)
+		fmt.Println("If there is no CAcert.pem file then probably there is no infrastructure present.")
 	}
 	defer file.Close()
 
 	_, err = file.WriteString(certPem)
 	if err != nil {
 		fmt.Printf("failed to create file CAcert.pem: %v\n", err)
+		fmt.Println("If there is no CAcert.pem file then probably there is no infrastructure present.")
+
 	}
 	// Return the CA and key in strings to be injected in the EC2 instance.
 	return certPem, keyPem, nil
