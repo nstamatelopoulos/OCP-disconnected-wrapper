@@ -92,7 +92,7 @@ resource "aws_security_group" "registry-sg" {
 }
 
 resource "random_string" "key_suffix" {
-  length  = 4
+  length  = 6
   special = false
 }
 
@@ -112,6 +112,7 @@ resource "aws_instance" "mirror-registry" {
   user_data = templatefile("registry-mirror-script-terraform.tpl", {
         access_key_id     = aws_iam_access_key.Cluster_deployer_key.id
         access_key_secret = aws_iam_access_key.Cluster_deployer_key.secret
+        random_token      = random_string.key_suffix.result
        })
 
 root_block_device {
@@ -173,4 +174,8 @@ output "private_subnet_3_id" {
 
 output "ec2_private_hostname" {
   value = aws_instance.mirror-registry.private_dns
+}
+
+output "random_token" {
+  value = random_string.key_suffix.result
 }

@@ -18,17 +18,81 @@ mkdir $homedir/registry-stuff && cd $homedir/registry-stuff
 mkdir $homedir/mirroring-workspace
 mkdir $homedir/cluster
 mkdir $homedir/.aws
+mkdir $homedir/certs
 
 chown ec2-user:ec2-user $homedir/mirroring-workspace 
 chown ec2-user:ec2-user $homedir/cluster
+chown ec2-user:ec2-user $homedir/certs
 
 echo "Installing required packages"
 
 sudo dnf update -y
 sudo yum install wget podman jq unzip -y -q
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" 
-unzip awscliv2.zip
+unzip -q awscliv2.zip
 sudo ./aws/install
+
+#=============================
+# Add the token for the agent
+#=============================
+
+echo "Creating the token file for the agent authentication"
+
+echo "${random_token}" > $homedir/agent-token
+
+chown ec2-user:ec2-user $homedir/agent-token
+
+#============================================
+# Add CAcert and CAfile to the EC2 instance
+#============================================
+
+echo "Creating the CA cert and CA key files"
+
+cat <<EOF > "$homedir/certs/CAcert.pem"
+$CA_CERT$
+EOF
+
+cat <<EOF > "$homedir/certs/CAkey.pem"
+$CA_KEY$
+EOF
+
+#===============================================
+# Creating the server certificate for the agent.
+#===============================================
+
+echo "Creating the server certificate"
+
+SERVER_CN="$(curl http://169.254.169.254/latest/meta-data/public-hostname)"
+echo $SERVER_CN
+COUNTRY="EU"
+STATE="Europe"
+LOCALITY="Europe"
+ORGANIZATION="Red Hat"
+ORG_UNIT="IT Department"
+DAYS_VALID=365
+
+# Output files
+SERVER_KEY="$homedir/certs/server.key"
+SERVER_CSR="$homedir/certs/server.csr"
+SERVER_CERT="$homedir/certs/server.crt"
+
+# Certificate and Key
+CA_CERT=$homedir/certs/CAcert.pem
+CA_KEY=$homedir/certs/CAkey.pem
+
+# Generate the server private key without a password
+openssl genpkey -algorithm RSA -out $SERVER_KEY
+
+# Generate the CSR with the specified details
+openssl req -new -key $SERVER_KEY -out $SERVER_CSR \
+    -subj "/C=$COUNTRY/ST=$STATE/L=$LOCALITY/O=$ORGANIZATION/OU=$ORG_UNIT/CN=$SERVER_CN" \
+    -addext "subjectAltName=DNS:$SERVER_CN"
+
+# Sign the CSR with the CA to create the server certificate
+openssl x509 -req -in $SERVER_CSR -CA $CA_CERT -CAkey $CA_KEY -CAcreateserial -out $SERVER_CERT -days $DAYS_VALID -sha256
+
+# Verify the server certificate
+openssl x509 -in $SERVER_CERT -text -noout
 
 #============================================
 # Setting up the agent container
@@ -37,7 +101,7 @@ sudo ./aws/install
 sudo podman run -d --pid=host --network=host \
 --name agent \
 -v /home/ec2-user:/ec2-user \
-quay.io/nstamate/agent:v7.9
+quay.io/nstamate/agent:v8.9
 
 #============================================
 # Downloading and setting up mirror-registry

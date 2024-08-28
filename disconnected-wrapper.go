@@ -135,12 +135,16 @@ func main() {
 			return
 		}
 		pullSecretPath, publicKeyPath = readPathsFromFile(initFileName)
+		CAcertString, CAkeyString, err := createCertificateAuthority()
+		if err != nil {
+			fmt.Printf("Couldn't generate the CA cert and key with error: %v\n", err)
+		}
 		if len(*clusterVersion) > 0 {
 			clusterFlag := true
-			installRegistry(clusterFlag, pullSecretPath, publicKeyPath, *region, amiID, *clusterVersion, *openshiftCNI, *installConfigFlag)
+			installRegistry(clusterFlag, pullSecretPath, publicKeyPath, *region, amiID, *clusterVersion, *openshiftCNI, *installConfigFlag, CAcertString, CAkeyString)
 		} else {
 			clusterFlag := false
-			installRegistry(clusterFlag, pullSecretPath, publicKeyPath, *region, amiID, *clusterVersion, *openshiftCNI, *installConfigFlag)
+			installRegistry(clusterFlag, pullSecretPath, publicKeyPath, *region, amiID, *clusterVersion, *openshiftCNI, *installConfigFlag, CAcertString, CAkeyString)
 		}
 
 		// If destroy flag is used destroy all
@@ -172,12 +176,12 @@ func runTerraform(mode string) error {
 	return nil
 }
 
-func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath string, region string, region_ami string, clusterVersion string, sdnCNI bool, installConfigFlag bool) {
+func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath string, region string, region_ami string, clusterVersion string, sdnCNI bool, installConfigFlag bool, CAcertString string, CAkeyString string) {
 
 	// Create new PullSecretTemplate
 	createPullSecretTemplate(pullSecretPath)
 	// Update bash script with Pull Secret provide by the user
-	updatePullSecret()
+	updateRegistryScriptFile(pullSecretTemplate, CAcertString, CAkeyString)
 	// Replace the appropriate values in registry template terraform file
 	UpdateCreateTfFileRegistry(publicKeyPath, region, region_ami)
 
@@ -257,11 +261,11 @@ func destroyRegistry() {
 		}
 
 	}
-	fmt.Println("The infrustructure destroyed successfully")
+	fmt.Println("The infrastructure destroyed successfully")
 }
 
-func updatePullSecret() {
-	pullSecretContent, err := os.ReadFile(pullSecretTemplate)
+func updateRegistryScriptFile(pullSecretTemp string, CAcert string, CAkey string) {
+	pullSecretContent, err := os.ReadFile(pullSecretTemp)
 	if err != nil {
 		println("Cannot read the pull-secret")
 	}
@@ -273,10 +277,12 @@ func updatePullSecret() {
 	}
 
 	addPullSecret := strings.ReplaceAll(string(scriptContent), "$PULL_SECRET_CONTENT$", pullSecretTemplateAsString)
+	addCAcert := strings.ReplaceAll(string(addPullSecret), "$CA_CERT$", CAcert)
+	addCAkey := strings.ReplaceAll(string(addCAcert), "$CA_KEY$", CAkey)
 
-	withoutCluster := os.WriteFile(registryScript, []byte(addPullSecret), 0644)
-	if withoutCluster != nil {
-		println("Cannot write the pull-secret to the registry script file")
+	error := os.WriteFile(registryScript, []byte(addCAkey), 0644)
+	if error != nil {
+		println("Cannot create the registry-script file")
 	}
 }
 
@@ -565,6 +571,7 @@ type InfraDetails struct {
 	PrivateSubnet2    string
 	PrivateSubnet3    string
 	PrivateDNS        string
+	Token             string
 }
 
 // This functions gets the infrastructure ids from terraform and adds them in the struct InfraDetails for later use from the program
@@ -602,12 +609,18 @@ func GetInfraDetails() {
 		log.Fatalf("Failed to get private DNS: %s\n", err)
 	}
 
+	randomToken, err := GetTerraformOutputs(initString + "random_token")
+	if err != nil {
+		log.Fatalf("Failed to get private DNS: %s\n", err)
+	}
+
 	infraDetailsStatus.AWSRegion = region
 	infraDetailsStatus.InstancePublicDNS = instanceDNS
 	infraDetailsStatus.PrivateSubnet1 = subnet1ID
 	infraDetailsStatus.PrivateSubnet2 = subnet2ID
 	infraDetailsStatus.PrivateSubnet3 = subnet3ID
 	infraDetailsStatus.PrivateDNS = ec2PrivateDNS
+	infraDetailsStatus.Token = randomToken
 }
 
 func GetTerraformOutputs(Cmd string) (string, error) {

@@ -46,6 +46,8 @@ func main() {
 
 	agentAction = &DeployDestroy{}
 
+	//authToken = getAuthTokenFromFile()
+
 	// Open a file for logging
 	logFile, err := os.OpenFile("/app/monitoring.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
@@ -72,21 +74,61 @@ func agentHTTPServer() {
 
 	// Here we reply with the status of Registry and Cluster
 
-	http.HandleFunc("/status", func(w http.ResponseWriter, req *http.Request) {
-		statusHandler(w)
-	})
+	http.HandleFunc("/status", withAuthorization(statusHandler))
 
-	http.HandleFunc("/data", func(w http.ResponseWriter, r *http.Request) {
-		installConfigHandler(w, r)
-	})
+	http.HandleFunc("/data", withAuthorization(installConfigHandler))
 
-	http.HandleFunc("/action", deployDestroyHandler)
+	http.HandleFunc("/action", withAuthorization(deployDestroyHandler))
+
+	certFile := "/ec2-user/certs/server.crt"
+	keyFile := "/ec2-user/certs/server.key"
 
 	fmt.Println("Starting HTTP Agent")
-	if err := http.ListenAndServe(":8090", nil); err != nil {
+	if err := http.ListenAndServeTLS(":8090", certFile, keyFile, nil); err != nil {
 		fmt.Printf("Error Starting HTTP Agent: %s\n", err)
 	}
 
+}
+
+func withAuthorization(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("withAuthorization: Checking token")
+		authToken := getAuthTokenFromFile()
+		fmt.Printf("The Token is %v\n", authToken)
+		authHeader := r.Header.Get("X-Auth-Token")
+		fmt.Printf("The Token received is: %v\n", authHeader)
+		if authHeader != authToken {
+			fmt.Println("The two strings are different")
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	}
+}
+
+func getAuthTokenFromFile() string {
+	// Open the file
+	file, err := os.Open("/ec2-user/agent-token")
+	if err != nil {
+		fmt.Println("Error opening agent-token file:", err)
+		os.Exit(4)
+	}
+	defer file.Close()
+
+	// Read the file content
+	content, err := io.ReadAll(file)
+	if err != nil {
+		fmt.Println("Error reading agent-token file:", err)
+		os.Exit(4)
+	}
+	// Convert content to string and trim any extra whitespace
+	result := strings.TrimSpace(string(content))
+
+	// Output the result
+	fmt.Println("agent-token file content appended to variable:")
+	fmt.Println(result)
+
+	return result
 }
 
 func updateInfraStatus() {
@@ -110,7 +152,7 @@ func updateInfraStatus() {
 // ======================================================================================
 // This is the HTTP handler for requests comming on path /status
 // ======================================================================================
-func statusHandler(w http.ResponseWriter) {
+func statusHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Set the response content type to json
 	w.Header().Set("Content-Type", "application/json")
