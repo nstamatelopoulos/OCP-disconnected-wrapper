@@ -34,7 +34,7 @@ func init() {
 }
 
 //==========================================================================================
-// Client type of functions
+// We create some structs to hold important information while the agent is running.
 //==========================================================================================
 
 type DeployDestroy struct {
@@ -47,7 +47,7 @@ type InfraState struct {
 	ClusterStatus  string
 }
 
-// Function to get the client status using HTTP. It expects a reply from the server-agent.
+// Function to get the client status using HTTP. It expects a reply from the agent container running on the registry host.
 func ClientGetStatus(url string) bool {
 	// Create the Client using the CAcert.pem file so can verify the agent TLS cert.
 	client, err := createHTTPClientWithCACert(CAcert)
@@ -82,6 +82,7 @@ func ClientGetStatus(url string) bool {
 	}
 	defer resp.Body.Close()
 
+	// If the response from the server is not a 200 print the respose code.
 	if resp.StatusCode != http.StatusOK {
 		fmt.Printf("The agent responded with error code %v\n", resp.StatusCode)
 		fmt.Println("Response code of 403 means that the request was not authorized. The action cannot be completed.")
@@ -105,7 +106,7 @@ func ClientGetStatus(url string) bool {
 		os.Exit(2)
 	}
 
-	// Check the status of the deployment
+	// Check the status of the deployment. Registry health and cluster existence
 	if agentStatus.RegistryHealth == "Healthy" && agentStatus.ClusterStatus == "DontExist" {
 		fmt.Println("Registry is Healthy but cluster does not exist")
 		return true
@@ -120,6 +121,7 @@ func ClientGetStatus(url string) bool {
 	return false
 }
 
+// If agent is down we need to provide some information to the user on some next steps.
 func agentIsDown(clientError error) {
 
 	registryExists, clusterExists := checkDeploymentState()
@@ -135,6 +137,7 @@ func agentIsDown(clientError error) {
 	}
 }
 
+// This is the client POST request to send the install-config.yaml file to the agent
 func sendInstallConfigToAgent(installconfig string, url string) {
 
 	// Create the Client using the CAcert.pem file so can verify the agent TLS cert.
@@ -179,6 +182,7 @@ func sendInstallConfigToAgent(installconfig string, url string) {
 	log.Println("Response from server:", string(body))
 }
 
+// This is the POST request from the client to tell the agent what to do install/destroy cluster and the cluster version in case of installing.
 func sendActionAndVersionToAgent(url string) {
 
 	// Create the Client using the CAcert.pem file so can verify the agent TLS cert.
@@ -227,6 +231,7 @@ func sendActionAndVersionToAgent(url string) {
 	}
 }
 
+// Here we use this function to set the required variables into the struck.
 func populateActionAndVersion(action bool, version string) {
 
 	if action && len(version) > 0 {
@@ -243,14 +248,10 @@ func populateActionAndVersion(action bool, version string) {
 }
 
 //======================================================================================
-//Check the status of the deployment
+//The below is the deployment of the Terraform part of the infrastructure.
 //======================================================================================
 
 func applyTerraformConfig() {
-
-	//======================================================================================
-	//The below is the deployment of the Terraform part of the infrastructure.
-	//======================================================================================
 
 	// Read the contents of the Terraform template file
 	fmt.Println("Updating .tfvars file with cluster flag")
@@ -282,6 +283,7 @@ func applyTerraformConfig() {
 
 }
 
+// Add some values to the install.config.yaml according the user entries/flags used.
 func populateInstallConfigValues(sdnFlag bool, installConfigFlag bool) string {
 
 	fmt.Println("Populating the install-config.yaml with the required infrastructure details")
@@ -350,6 +352,8 @@ func populateInstallConfigValues(sdnFlag bool, installConfigFlag bool) string {
 
 }
 
+// Here we create a CA cert and CA key to be injected in the mirror registry host for signing the agent server certificate and key.
+// Also we save a copy of the CA cert locally for use by the client so it can verify the server
 func createCertificateAuthority() (string, string, error) {
 	// Generate the private key for the CA
 	caPrivateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -412,6 +416,7 @@ func createCertificateAuthority() (string, string, error) {
 	return certPem, keyPem, nil
 }
 
+// Here we create an HTTP client object to be used by the client fuctions that make the HTTP requests. We use the CA cert for this.
 func createHTTPClientWithCACert(caCertPath string) (*http.Client, error) {
 	// Load CA cert
 	caCert, err := os.ReadFile(caCertPath)

@@ -46,8 +46,6 @@ func main() {
 
 	agentAction = &DeployDestroy{}
 
-	//authToken = getAuthTokenFromFile()
-
 	// Open a file for logging
 	logFile, err := os.OpenFile("/app/monitoring.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
@@ -72,14 +70,18 @@ func agentHTTPServer() {
 
 	fmt.Println("Starting HTTP agent-server")
 
-	// Here we reply with the status of Registry and Cluster
-
+	// This handler will reply with the status of Registry and Cluster
 	http.HandleFunc("/status", withAuthorization(statusHandler))
+
+	// This handler will get the install-config from the agent.
 
 	http.HandleFunc("/data", withAuthorization(installConfigHandler))
 
+	// This handler will get the install or destroy action and a cluster-version in case of install
+
 	http.HandleFunc("/action", withAuthorization(deployDestroyHandler))
 
+	// These are the Certificate and key of the agent signed by the CAcert.pem that is local to the user machine.
 	certFile := "/ec2-user/certs/server.crt"
 	keyFile := "/ec2-user/certs/server.key"
 
@@ -90,6 +92,7 @@ func agentHTTPServer() {
 
 }
 
+// This function is a security authentication mechanism to authorize requests with a token that only agent and client knows. We return 403 otherwise.
 func withAuthorization(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("withAuthorization: Checking token")
@@ -106,6 +109,7 @@ func withAuthorization(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// We use this function so the agent to know what is the token it should expect when contacted by the client.
 func getAuthTokenFromFile() string {
 	// Open the file
 	file, err := os.Open("/ec2-user/agent-token")
@@ -131,6 +135,7 @@ func getAuthTokenFromFile() string {
 	return result
 }
 
+// This is used to update the status of the registry and cluster existence and populates the struct that holds these values.
 func updateInfraStatus() {
 	statusMutex.Lock()
 	defer statusMutex.Unlock()
@@ -318,9 +323,9 @@ func getClusterStatus() bool {
 	return isClusterInstalled
 }
 
-// ======================================================================================
-// This is to start the openshift installation using the OCP installer
-// ======================================================================================
+// ====================================================================================================================================================
+// This is the fuction that controls the either the installation or destroy of openshift the openshift cluster according to the user requested action.
+// ====================================================================================================================================================
 
 func installOrDestroyCluster(action string, clusterVersion string) {
 
@@ -335,6 +340,10 @@ func installOrDestroyCluster(action string, clusterVersion string) {
 	}
 
 }
+
+// ======================================================================================
+// This is running the bash script for destroying the cluster
+// ======================================================================================
 
 func destroyCluster() {
 
@@ -362,6 +371,10 @@ func destroyCluster() {
 	}
 }
 
+// ======================================================================================
+// This is running the bash script for installing the cluster
+// ======================================================================================
+
 func installCluster() {
 	fmt.Println("Running the installation script as ec2-user")
 
@@ -379,6 +392,10 @@ func installCluster() {
 	}
 
 }
+
+//======================================================================================
+//This is the HTTP handler for requests comming on path /action
+//======================================================================================
 
 func deployDestroyHandler(w http.ResponseWriter, r *http.Request) {
 	// Read the request body
@@ -408,6 +425,10 @@ func deployDestroyHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("Running go routine to install or destroy the cluster. Action is: %s and Version is: %s\n", agentAction.Deploy, agentAction.ClusterVersion)
 	go installOrDestroyCluster(agentAction.Deploy, agentAction.ClusterVersion)
 }
+
+//============================================================================================
+// Here we populate the installer script with specific details taken from the /action handler
+//============================================================================================
 
 func populateVersionToInstallerScript(clusterVersion string) {
 

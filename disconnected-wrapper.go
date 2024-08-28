@@ -20,6 +20,8 @@ const (
 	CAcert                 = "CAcert.pem"
 )
 
+// All RHEL 9 AMI images for all regions under our AWS lab account
+
 var regions = map[string]string{
 	"eu-west-1":      "ami-07d4917b6f95f5c2a",
 	"eu-west-2":      "ami-07d1e0a32156d0d21",
@@ -40,12 +42,13 @@ var regions = map[string]string{
 	"ca-central":     "ami-0775d166d9bde92c8",
 	"sa-east-1":      "ami-06dec7e27b4abea7b",
 }
+
 var pullSecretPath string
 var publicKeyPath string
 
 func main() {
 
-	// Parse command-line arguments
+	// All flags that make this tool.
 	region := flag.String("region", "", "Set the AWS region")
 	installFlag := flag.Bool("install", false, "Install Registry")
 	destroyFlag := flag.Bool("destroy", false, "Destroy Registry")
@@ -61,8 +64,10 @@ func main() {
 
 	flag.Parse()
 
+	// This is a function that has policies for all flags to prevent program failure if user provide them incorectly. Check flags.go package for the code.
 	consolidatedFlagCheckFunction(*installFlag, *destroyFlag, *region, *clusterVersion, *initFlag, *helpFlag, *openshiftCNI, *destroyClusterFlag, *addClusterFlag, *installConfigFlag, *forceFlag)
 
+	// Here we handle the case where the user will attempt to add a cluster when a registry host is already provisioned.
 	if *addClusterFlag && len(*clusterVersion) > 0 {
 		GetInfraDetails()
 		agentRegistryStatus := ClientGetStatus(infraDetailsStatus.InstancePublicDNS)
@@ -81,6 +86,7 @@ func main() {
 		return
 	}
 
+	// Here we hadle the case where the user will attempt to destroy a cluster ONLY. Not the registry host too.
 	if *destroyClusterFlag {
 		GetInfraDetails()
 		agentRegistryStatus := ClientGetStatus(infraDetailsStatus.InstancePublicDNS)
@@ -95,6 +101,7 @@ func main() {
 		return
 	}
 
+	// Here we can use the --status flag to get information on what we have provisioned and what not. Returns if a cluster is present and if QUAY registry is healhty.
 	if *statusFlag {
 		GetInfraDetails()
 		ClientGetStatus(infraDetailsStatus.InstancePublicDNS)
@@ -117,12 +124,11 @@ func main() {
 			fmt.Println("No terraform.tfstate file detected. The tool is probably run for the first time")
 		} else if err == nil {
 			fmt.Println("The terraform.tfstate file is detected. Checking current state.")
-			//checkDeploymentState()
 		} else {
 			fmt.Println("Error:", err)
 		}
 
-		// Delete left over templates
+		// Delete left over templates in case it was not cleaned up properly. Normally this should not be required but adding just in case
 		deleteGeneratedFiles()
 
 		// Check if the credentials are present if not ask for them
@@ -151,6 +157,7 @@ func main() {
 		// If destroy flag is used destroy all
 	} else if *destroyFlag && !*forceFlag {
 		destroyRegistry()
+		// If agent is down --force flag will simply destroy the mirror-registry host using raw terraform destroy command.
 	} else if *destroyFlag && *forceFlag {
 		fmt.Println("Destroying the infrastructure by running Terraform destroy command")
 		mode := "destroy"
@@ -177,11 +184,12 @@ func runTerraform(mode string) error {
 	return nil
 }
 
+// This is the main function that is being used to install the infrastructure requested by the user. Could be ONLY registry or also a cluster
 func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath string, region string, region_ami string, clusterVersion string, sdnCNI bool, installConfigFlag bool, CAcertString string, CAkeyString string) {
 
 	// Create new PullSecretTemplate
 	createPullSecretTemplate(pullSecretPath)
-	// Update bash script with Pull Secret provide by the user
+	// Update bash script with Pull Secret and Certs for the agent
 	updateRegistryScriptFile(pullSecretTemplate, CAcertString, CAkeyString)
 	// Replace the appropriate values in registry template terraform file
 	UpdateCreateTfFileRegistry(publicKeyPath, region, region_ami)
@@ -199,6 +207,7 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 		log.Fatalf("Failed to execute terraform apply: %v", err)
 	}
 
+	// If there is a --cluster-version flag defined here we start the cluster installation. We contact the agent and agent is installing the cluster from the registry.
 	if clusterFlag {
 		fmt.Println("Sleeping for 5 minutes while waiting for the Registry and Agent to come up")
 		time.Sleep(5 * time.Minute)
@@ -228,6 +237,7 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 	}
 }
 
+// This fuction is to destroy the infrastructure. If agent is active first checks if there is a cluster there so to destroy this also.
 func destroyRegistry() {
 	GetInfraDetails()
 	agentRegistryStatus := ClientGetStatus(infraDetailsStatus.InstancePublicDNS)
@@ -265,6 +275,7 @@ func destroyRegistry() {
 	fmt.Println("The infrastructure destroyed successfully")
 }
 
+// We update the registry initialization script "registry-mirror-script-terraform.sh.temp" and creates the "registry-mirror-script-terraform.sh.tpl"
 func updateRegistryScriptFile(pullSecretTemp string, CAcert string, CAkey string) {
 	pullSecretContent, err := os.ReadFile(pullSecretTemp)
 	if err != nil {
@@ -287,7 +298,7 @@ func updateRegistryScriptFile(pullSecretTemp string, CAcert string, CAkey string
 	}
 }
 
-// To clean up the bash script, pull secret template, .tfvars and TF details filesgenerated files after successfull deployment of the registry.
+// To clean up the bash script, pull secret template, .tfvars and TF detail generated files after successfull deployment of the registry.
 func deleteGeneratedFiles() {
 	Script := os.Remove(registryScript)
 	PullSecretTemp := os.Remove(pullSecretTemplate)
@@ -354,6 +365,7 @@ func createPullSecretTemplate(pullSecret string) {
 
 }
 
+// Here we populate the tfvars file with the infrastructure details before it is being used by Terraform.
 func UpdateCreateTfFileRegistry(publicKey string, region string, amiID string) {
 
 	// Read the contents of the Terraform template file
@@ -382,6 +394,7 @@ func UpdateCreateTfFileRegistry(publicKey string, region string, amiID string) {
 	}
 }
 
+// Here we set the flag to the tfvars file in case there is a cluster installation required so we can provision all the cluster required resources.
 func SetClusterFlagTerraform(flag bool) {
 	// Read the contents of the Terraform template file
 	fmt.Println("Creating the .tfvars file")
@@ -426,6 +439,7 @@ func interactiveCLIFunction(question string) string {
 	return strings.TrimSpace(s)
 }
 
+// Here we write the paths from the init command to the initData.json file.
 func writePathsToFile(filename string, pathMap map[string]string) error {
 	// Convert the map in JSON format.
 	data, err := json.Marshal(pathMap)
@@ -446,6 +460,7 @@ func writePathsToFile(filename string, pathMap map[string]string) error {
 	return err
 }
 
+// Here we read the paths from the init command from the initData.json file.
 func readPathsFromFile(filename string) (pullSecret string, publickey string) {
 	// Read the json file
 	data, err := os.ReadFile(filename)
@@ -504,6 +519,7 @@ func initialization(initFile string) {
 	fmt.Printf("Using public-key from file: %v\n", publicKeyPath)
 }
 
+// Its being used as an additional way to check the provisioned infrastructure in case the agent is down. Its checking specific objects existence in the tfstate file.
 func checkDeploymentState() (registyStatus bool, clusterStatus bool) {
 	// Read the JSON file
 	jsonData, err := os.ReadFile("./terraform.tfstate")
@@ -625,6 +641,7 @@ func GetInfraDetails() {
 	infraDetailsStatus.Token = randomToken
 }
 
+// Thats a helper for executing the terraform output commands
 func GetTerraformOutputs(Cmd string) (string, error) {
 	cmd := exec.Command("bash", "-c", Cmd)
 	output, err := cmd.Output()
