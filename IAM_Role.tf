@@ -3,7 +3,7 @@
 #=====================================================================================================================================
 
 resource "aws_iam_user" "Cluster_deployer" {
-  name = "Cluster_deployer-${var.Child_Random_Suffix}"
+  name = "Cluster_deployer-${random_string.key_suffix.result}"
 }
 
 resource "aws_iam_access_key" "Cluster_deployer_key" {
@@ -18,10 +18,10 @@ output IAM_User_name {
   value = aws_iam_user.Cluster_deployer.name
 }
 
-output IAM_User_Access_Key_id {
-  value = aws_iam_access_key.Cluster_deployer_key.id
-}
+# output IAM_User_Access_Key_id {
+#   value = aws_iam_access_key.Cluster_deployer_key.id
+# }
 
-output IAM_User_Access_key_Secret {
-  value = aws_iam_access_key.Cluster_deployer_key.secret
-}
+# output IAM_User_Access_key_Secret {
+#   value = aws_iam_access_key.Cluster_deployer_key.secret
+# }

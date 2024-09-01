@@ -70,12 +70,21 @@ resource "aws_security_group" "registry-sg" {
     cidr_blocks      = ["0.0.0.0/0"]
   }
 
+  ingress {
+    description      = "Agent port from everywhere"
+    from_port        = 8090
+    to_port          = 8090
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+  }
+
   egress {
     from_port        = 0
     to_port          = 0
     protocol         = "-1"
     cidr_blocks      = ["0.0.0.0/0"]
   }
+  
 
   tags = {
     Name = "allow_ssh_https"
@@ -83,7 +92,7 @@ resource "aws_security_group" "registry-sg" {
 }
 
 resource "random_string" "key_suffix" {
-  length  = 4
+  length  = 6
   special = false
 }
 
@@ -101,16 +110,12 @@ resource "aws_instance" "mirror-registry" {
   vpc_security_group_ids = [aws_security_group.registry-sg.id]
 
   user_data = templatefile("registry-mirror-script-terraform.tpl", {
-        private_subnet_1 = var.Create_Cluster ? module.Cluster_Dependencies[0].Subnet_1 : "N/A"
-        private_subnet_2 = var.Create_Cluster ? module.Cluster_Dependencies[0].Subnet_2 : "N/A"
-        private_subnet_3 = var.Create_Cluster ? module.Cluster_Dependencies[0].Subnet_3 : "N/A"
-        region           = data.aws_region.current.name
-        access_key_id     = var.Create_Cluster ? module.Cluster_Dependencies[0].IAM_User_Access_Key_id : "N/A"
-        access_key_secret = var.Create_Cluster ? module.Cluster_Dependencies[0].IAM_User_Access_key_Secret : "N/A"
-        cluster_VPC_id    = aws_vpc.disconnected-vpc.id
-  })
-  
-  root_block_device {
+        access_key_id     = aws_iam_access_key.Cluster_deployer_key.id
+        access_key_secret = aws_iam_access_key.Cluster_deployer_key.secret
+        random_token      = random_string.key_suffix.result
+       })
+
+root_block_device {
     volume_size = 700
     volume_type = "gp2"
   }
@@ -127,7 +132,7 @@ locals {
 
 output "ec2_instance_public_dns" {
   description = "SSH command to connect to the EC2 instance"
-  value       = "To connect to the registry run ssh -i <your-private-key> ec2-user@${aws_instance.mirror-registry.public_dns}"
+  value       = aws_instance.mirror-registry.public_dns
 }
 
 output "wait_for_initialization" {
@@ -144,7 +149,33 @@ module Cluster_Dependencies {
   Child_Availability_Zone_B = var.Availability_Zone_B
   Child_Availability_Zone_C = var.Availability_Zone_C
   Child_Region = var.Region
-  Child_Random_Suffix = random_string.key_suffix.result
+  #Child_Random_Suffix = random_string.key_suffix.result
 }
 
 
+output "region" {
+  value = data.aws_region.current.name
+  description = "The region of the infrastructure"
+}
+output "private_subnet_1_id" {
+  value = var.Create_Cluster ? module.Cluster_Dependencies[0].Subnet_1 : "N/A"
+  description = "The ID of the first private subnet"
+}
+
+output "private_subnet_2_id" {
+  value = var.Create_Cluster ? module.Cluster_Dependencies[0].Subnet_2 : "N/A"
+  description = "The ID of the first private subnet"
+}
+
+output "private_subnet_3_id" {
+  value = var.Create_Cluster ? module.Cluster_Dependencies[0].Subnet_3 : "N/A"
+  description = "The ID of the first private subnet"
+}
+
+output "ec2_private_hostname" {
+  value = aws_instance.mirror-registry.private_dns
+}
+
+output "random_token" {
+  value = random_string.key_suffix.result
+}
