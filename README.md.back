@@ -46,18 +46,20 @@ In case you are not aware you can download your pull-secret from Red Hat [consol
 # How to use
 
 1) Clone the repository.
-2) Go to the v2.x latest release and download the binary that suits your OS. It is supported for both Mac and Linux.
-3) Extract the binary from the downloaded tar file and execute it **inside the cloned directory**. (There are some files it depends to and expects to find there)
+2) Go to the latest release and download the binary that suits your OS. It is supported for both Mac and Linux.
+3) Extract the binary from the downloaded tar file and execute it **inside the cloned directory**.
    
 Required flags for launching an installation of the Mirror-Registry:
 - **--install** # Instructs the tool that we are launching an installation.
 - **--region** # Here we set the region we like to install the Mirror-Registry. All regions available in the AWS shared account are supported. (examples: eu-west-1, eu-west-2 etc..)
 
-Required flags for launching an installation of the Mirror-Registry AND a fully disconnected OCP cluster. (By default an SNO)
+Required flags for launching an installation of the Mirror-Registry AND a fully disconnected OCP cluster.
 - **--install** # Instructs the tool that we are launching an installation.
 - **--region** # Here we set the region we like to install the Mirror-Registry. All regions available in the AWS shared account are supported. (examples: eu-west-1,
 - **--cluster-version** # With this flag we tell the program that we need a cluster and the exact version of the cluster (examples: 4.12.13, 4.13.11 etc..)
-- **--sdn** # With this flag one can install the cluster with the OpenshiftSDN CNI. If the flag is not defined the cluster will install using OVN-Kubernetes (Supported up to OCP v4.14)
+- **--sdn** # With this flag one can install the cluster with the OpenshiftSDN CNI. If the flag is not defined the cluster will install using OVN-Kubernetes
+
+A flag policy is also added so if you did something wrong you will get a relevant message that indicate the problem. If you find any scenario that i missed to cover please inform me to fix it.
 
 Credentials Initialization flag:
 - **--init** # This flag i used to overwrite any credentials in case the pull-secret or the key-pair are lost or need to be changed.
@@ -65,26 +67,6 @@ It saves them under the project directory in a file named "initData.json"
 
 Help flag:
 - **--help** # It prints all flags and their descriptions.
-
-# OCPD v2 review
-
-OCPD v2 uses an HTTP server (agent-controller container) running on the mirror registry at all times. This way we can  have the below new features:
-
-- We can check the status of the infrastructure at all times.
-- We can destroy everything even an existing cluster without having to login to the registry and destroy manually as with OCPDv1
-- We can be flexible and install or destroy ONLY the cluster without having to redeploy everything from scratch.
-- We can use custom install-config.yaml to deploy any configuration supported on AWS cloud.
-
-Flags for further flexibility and new features provided with OCPD v2.
-
-- **--status** # Brings details on the already provisioned infrastructure. Cluster existence and Quay registry health.
-- **--add-cluster** # To be used with **--cluster-version <OCP-version>** flag. It is adding a cluster without having to destroy the registry.
-- **--destroy-cluster** # It is destroying an existing cluster without having to destroy the registry.
-- **--custom-install-config** # It is used to let the user provide a custom install-config.yaml config. It expects a valid install-config.yaml file under the same directory. The template for the install config is provided below in the "Custom Install Config" section.
-- **--force** # This flag is to be used with the **--destroy** flag if the agent-controller container on the mirror-registry host is down. If there is a cluster in place the user need to manually destroy before attempting using this flag.
-
-A flag policy is also added so if you did something wrong you will get a relevant message that indicate the problem. If you find any scenario that i missed to cover please inform me to fix it.
-
 
 # Examples:
 
@@ -94,77 +76,16 @@ A flag policy is also added so if you did something wrong you will get a relevan
 - **ocpd** **--destroy** # Destroy the mirror registry.**This does not destroy the cluster IF created. User should first destroy the cluster** 
 To destroy the cluster run the below command in the installation directory that is under /home/ec2-user/cluster in the created Registry instance:
 
-# Examples for OCPDv2 features
-
-- **ocpd** **--status** # Brings details on the already provisioned infrastructure. Cluster existence and Quay registry health.
-- **ocpd** **--add-cluster** **--cluster-version 4.12.13** # Add a cluster post installing the registry. Only one cluster at a time can exist.
-- **ocpd** **--add-cluster** **--cluster-version 4.12.13** **--custom-install-config** # Add a cluster post installing the registry with custom install-config.yaml. Only one cluster at a time can exist.
-- **ocpd** **--destroy-cluster** # Destroys a cluster that is already present but nothing else.
-- **ocpd** **--destroy** **--force** # To be used if the agent-controller container on the mirror-registry host is down and the program exits without letting the user to destroy the infrastructure. If there is a cluster in place the user need to manually destroy before attempting using this flag combination.
-
 ~~~
 $ openshift-install destroy cluster --dir . --log-level=info
 ~~~
 
-**Important for OCPD v1.x versions:** The cluster is not managed by this tool upon creation only the Mirror-Registry is. It is the user responsibility to first destroy the cluster using the openshift-installer prior running **--destroy**.
+**Important:** The cluster is not managed by this tool upon creation only the Mirror-Registry is. It is the user responsibility to first destroy the cluster using the openshift-installer prior running **--destroy**.
 This is because if the instance get destroyed prior the cluster the installation directory will get lost so all the resources of the cluster will remain running on AWS and a manual cleanup will be needed that is not the best experience if you ask me. 
 For this reason i added an interactive question to ask the user every time **--destroy** flag is used before it destroy the Mirror-Registry. 
 Only with "yes" will destroy.
 
 **Note:** If one creates any other resources on the created VPC manually post the deployment these need to be deleted prior running the --destroy command, terraform knows only the components that are created during the installation of the mirror-registry. Not managed objects of terraform can cause issues when destroying the VPC.
-
-# OCPDv2 Custom Install Config
-
-Below is the template the user need to use to deploy a cluster with customizations. Everything that is supported for AWS IPI is allowed. 
-**Important:** Do not touch any interpolated fields ${.....} OR "$....." cause it will result to failed cluster deployment. This need to be as is.
-
-```
-apiVersion: v1
-baseDomain: emea.aws.cee.support
-credentialsMode: Passthrough
-compute:
-  - architecture: amd64
-    hyperthreading: Enabled
-    name: worker
-    platform: {}
-    replicas: 2
-controlPlane:
-  architecture: amd64
-  hyperthreading: Enabled
-  name: master
-  platform: {}
-  replicas: 3
-metadata:
-  name: disconnected-$RANDOM_VALUE
-networking:
-  clusterNetwork:
-    - cidr: 10.128.0.0/14
-      hostPrefix: 23
-  machineNetwork:
-    - cidr: 10.0.0.32/27
-    - cidr: 10.0.0.64/27
-    - cidr: 10.0.0.96/27
-  networkType: $CNI
-  serviceNetwork:
-    - 172.30.0.0/16
-platform:
-  aws:
-    region: ${region}
-    subnets:
-      - ${private_subnet_1}
-      - ${private_subnet_2}
-      - ${private_subnet_3}
-publish: Internal
-imageContentSources:
-  - mirrors:
-      - $hostname:8443/openshift/release
-    source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
-  - mirrors:
-      - $hostname:8443/openshift/release-images
-    source: quay.io/openshift-release-dev/ocp-release
-```
-
-Just customize this template and save it as install-config.yaml under the OCPD cloned directory. Then set the **--custom-install-config** flag to be picked up by the program instead the default one.
 
 # Additional information for the usage:
 
@@ -186,11 +107,6 @@ When the user logs in the registry there are 3 directories:
 - mirroring-workspace # Contains a sample **imageset-config.yaml** file and oc-mirror binary is already in the PATH. If you have created a cluster this imageset-config.yaml file will have the selected release channel and version. If you want to mirror any operators you need to add the "operators" section below and don't touch this section or touch it if you know what you are doing. The reason for this is to not accidentally prune the release images.
 - registry-stuff # Its the registry folder as you can imagine from the name. Don't touch this directory except if you know what you are doing.
 - cluster # This is the installation directory of the cluster.
-- certs # Holds the certificates for the agent so it can use HTTPS.
-
-# Additional information for the usage for OCPDv2:
-
-- The agent takes about 2-3 minutes to get up on the registry host. So any **--status** command run before that will result to an error. Wait up to 5 minutes for it to be up but anything greater than 5 minutes it is not normal and the user should investigate what is going on by using the "cloud-init-output.log" Its the same script that is responsible to start the agent-controller container.
 
 # Usefull Information
 
@@ -199,4 +115,3 @@ When the user logs in the registry there are 3 directories:
 - Mirror registry has SSH access to all nodes
 - The kubeconfig of the cluster is under /home/ec2-user/cluster/auth/kubeconfig
 - One can check the installer progress by running tail -f /home/ec2-user/cluster/.openshift-install.log
-- One can check the agent container status using "sudo podman ps" command and check logs with "sudo podman logs -f <Container-ID>"
