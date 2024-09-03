@@ -135,6 +135,11 @@ output "ec2_instance_public_dns" {
   value       = aws_instance.mirror-registry.public_dns
 }
 
+output "ec2_instance_public_dns_for_user" {
+  description = "SSH command to connect to the EC2 instance"
+  value       = "To connect to the registry run ssh -i <your-private-key> ec2-user@${aws_instance.mirror-registry.public_dns}"
+}
+
 output "wait_for_initialization" {
   description = "Initialization instructions"
   value       = "The registry requires ~ 5 minutes to initialize. It will be ready when you see the READY file under /home/ec2-user/"
