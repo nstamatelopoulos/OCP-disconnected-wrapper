@@ -11,3 +11,4 @@ terraform
 initData.json
 bin/
 .server-client/
+README.md.back

@@ -104,7 +104,7 @@ chown -R ec2-user:ec2-user $homedir/certs/
 sudo podman run -d --pid=host --network=host \
 --name agent \
 -v /home/ec2-user:/ec2-user \
-quay.io/nstamate/agent:v9.0
+quay.io/nstamate/agent:v2.1
 
 #============================================
 # Downloading and setting up mirror-registry
@@ -172,8 +172,6 @@ sudo update-ca-trust
 #===============================================================================================
 # Creating the .aws/Credentials file with the static credentials from the cluster deployer user
 #===============================================================================================
-
-mkdir $homedir/.aws
 
 cat <<EOF > $homedir/.aws/credentials
 [default]

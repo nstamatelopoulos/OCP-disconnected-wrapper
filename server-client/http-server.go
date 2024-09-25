@@ -278,9 +278,11 @@ func monitorClusterInstallation(installDir string) {
 	for {
 		bootstrapExists := false
 		clusterExists := false
+		cluster_4_16_Exists := false
 
 		bootstrapFile := installDir + "/" + "terraform.bootstrap.tfstate"
 		clusterFile := installDir + "/" + "terraform.cluster.tfstate"
+		cluster_4_16_file := installDir + "/" + "terraform.platform.auto.tfvars.json"
 
 		log.Printf("The path is: %s\n", bootstrapFile)
 		log.Printf("The path is: %s\n", clusterFile)
@@ -299,8 +301,18 @@ func monitorClusterInstallation(installDir string) {
 			log.Println("Terraform.cluster.tfstate file detected.")
 		}
 
-		if bootstrapExists || clusterExists {
-			log.Println("At least one Terraform tfstate file detected. There is a cluster installation present")
+		// For OCP version 4.16 + that use no terraform.tfstate files anymore.
+		//=================================================================
+		if _, err := os.Stat(cluster_4_16_file); os.IsNotExist(err) {
+			log.Println("No terraform.platform.auto.tfvars.json file detected.")
+		} else if err == nil {
+			cluster_4_16_Exists = true
+			log.Println("Terraform.platform.auto.tfvars.json file detected.")
+		}
+		//=================================================================
+
+		if bootstrapExists || clusterExists || cluster_4_16_Exists {
+			log.Println("At least one cluster file detected in the install-dir. There is a cluster installation present")
 			setClusterStatus(true)
 		} else {
 			setClusterStatus(false)

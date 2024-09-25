@@ -141,9 +141,7 @@ networking:
     - cidr: 10.128.0.0/14
       hostPrefix: 23
   machineNetwork:
-    - cidr: 10.0.0.32/27
-    - cidr: 10.0.0.64/27
-    - cidr: 10.0.0.96/27
+    - cidr: 10.0.0.0/23
   networkType: $CNI
   serviceNetwork:
     - 172.30.0.0/16

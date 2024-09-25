@@ -61,11 +61,18 @@ func checkaddCluster(addCluster bool, clusterVersion string, installConfig bool)
 }
 
 func checkInstallConfigFlag(installConfig bool, install bool, region string, clusterVersion string, addCluster bool, sdn bool) {
-	if !(installConfig && len(clusterVersion) > 0 && install && len(region) > 0 && (sdn || true)) || !(installConfig && len(clusterVersion) > 0 && addCluster && (sdn || true)) {
-		fmt.Println("The --install-config flag must be used with --install --region --cluster-version flags and as optional the --sdn flag OR if you add a cluster")
-		fmt.Println("it must be used with --add-cluster and --cluster-version flags and as optional the --sdn flag")
-		os.Exit(1)
+	// Install mode check
+	if installConfig && install && len(clusterVersion) > 0 && len(region) > 0 && (sdn || !sdn) {
+		return
 	}
+	// Add cluster mode check
+	if installConfig && addCluster && len(clusterVersion) > 0 && (sdn || !sdn) {
+		return
+	}
+	// If neither conditions were satisfied, print the error and exit
+	fmt.Println("The --custom-install-config flag must be used with --install --region --cluster-version flags and as optional the --sdn flag")
+	fmt.Println("OR if you add a cluster, it must be used with --add-cluster and --cluster-version flags and as optional the --sdn flag")
+	os.Exit(1)
 }
 
 func checkForceFlag(destroy bool, force bool) {
