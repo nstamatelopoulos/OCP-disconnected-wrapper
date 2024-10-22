@@ -116,4 +116,5 @@ func flagsHelp() {
 	fmt.Println("--destroy-cluster  		Enables the user to destroy a cluster without destroying anything else. Mirror Registry is not affected only cluster is destroyed.")
 	fmt.Println("--custom-install-config  	Enables the user to use a custom install-config.yaml file. Requires a file with name 'custom-install-config.yaml' under the OCPD cloned directory")
 	fmt.Println("--help						Help")
+	fmt.Println("--verion                   Prints OCPD release version")
 }

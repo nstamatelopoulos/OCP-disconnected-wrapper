@@ -18,6 +18,7 @@ const (
 	pullSecretTemplate     = "pull-secret.template"
 	initFileName           = "initData.json"
 	CAcert                 = "CAcert.pem"
+	releaseVersion         = "v2.2"
 )
 
 // All RHEL 9 AMI images for all regions under our AWS lab account
@@ -61,8 +62,15 @@ func main() {
 	destroyClusterFlag := flag.Bool("destroy-cluster", false, "To destroy the cluster but keep the existing registry")
 	installConfigFlag := flag.Bool("custom-install-config", false, "Edit the default install-config.yaml")
 	forceFlag := flag.Bool("force", false, "Force destroy the infrastructure if agent is unavailable. (Terraform destroy)")
+	versionFlag := flag.Bool("version", false, "Show the OCPD relese version")
 
 	flag.Parse()
+
+	//If used with other flags it will return so nothing will happen as its checked first. I won't add this in the Flag policy.
+	if *versionFlag {
+		fmt.Printf("The OCPD release version is %v\n", releaseVersion)
+		return
+	}
 
 	// This is a function that has policies for all flags to prevent program failure if user provide them incorectly. Check flags.go package for the code.
 	consolidatedFlagCheckFunction(*installFlag, *destroyFlag, *region, *clusterVersion, *initFlag, *helpFlag, *openshiftCNI, *destroyClusterFlag, *addClusterFlag, *installConfigFlag, *forceFlag)

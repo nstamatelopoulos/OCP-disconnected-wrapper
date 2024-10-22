@@ -112,11 +112,11 @@ quay.io/nstamate/agent:v2.1
 
 echo "Getting mirror-registry package"
 
-wget -q https://developers.redhat.com/content-gateway/rest/mirror/pub/openshift-v4/clients/mirror-registry/latest/mirror-registry.tar.gz
+wget -q https://mirror.openshift.com/pub/cgw/mirror-registry/latest/mirror-registry-amd64.tar.gz
 
 echo "Unpacking the tar file"
 
-tar -xf mirror-registry.tar.gz
+tar -xf mirror-registry-amd64.tar.gz
 
 echo "Installing mirror-registry"
 
