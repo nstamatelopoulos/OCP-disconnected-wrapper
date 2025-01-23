@@ -239,7 +239,7 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 				populateActionAndVersion(true, clusterVersion)
 				// We need to let the mirror-registry to initialize properly before we run the installation script.
 				fmt.Println("Waiting for 5 minutes to make sure everything initialized normally")
-				time.Sleep(3 * time.Minute)
+				time.Sleep(5 * time.Minute)
 				sendActionAndVersionToAgent(infraDetailsStatus.InstancePublicDNS)
 				break
 			} else if agentRegistryStatus && agentStatus.ClusterStatus == "Exists" {
