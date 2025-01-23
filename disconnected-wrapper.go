@@ -18,7 +18,7 @@ const (
 	pullSecretTemplate     = "pull-secret.template"
 	initFileName           = "initData.json"
 	CAcert                 = "CAcert.pem"
-	releaseVersion         = "v2.2"
+	releaseVersion         = "v2.3"
 )
 
 // All RHEL 9 AMI images for all regions under our AWS lab account
@@ -113,15 +113,18 @@ func main() {
 	if *statusFlag {
 		GetInfraDetails()
 		ClientGetStatus(infraDetailsStatus.InstancePublicDNS)
+		return
 	}
 
 	// If init flag is used then start interactive prompt to get the paths
 	if *initFlag {
 		initialization(initFileName)
+		return
 	}
 	// If the help flag is used display the flag descriptions
 	if *helpFlag {
 		flagsHelp()
+		return
 	}
 
 	// If the install flag is used do appropriate actions for installation
@@ -153,18 +156,22 @@ func main() {
 		CAcertString, CAkeyString, err := createCertificateAuthority()
 		if err != nil {
 			fmt.Printf("Couldn't generate the CA cert and key with error: %v\n", err)
+			return
 		}
 		if len(*clusterVersion) > 0 {
 			clusterFlag := true
 			installRegistry(clusterFlag, pullSecretPath, publicKeyPath, *region, amiID, *clusterVersion, *openshiftCNI, *installConfigFlag, CAcertString, CAkeyString)
+			return
 		} else {
 			clusterFlag := false
 			installRegistry(clusterFlag, pullSecretPath, publicKeyPath, *region, amiID, *clusterVersion, *openshiftCNI, *installConfigFlag, CAcertString, CAkeyString)
+			return
 		}
 
 		// If destroy flag is used destroy all
 	} else if *destroyFlag && !*forceFlag {
 		destroyRegistry()
+		return
 		// If agent is down --force flag will simply destroy the mirror-registry host using raw terraform destroy command.
 	} else if *destroyFlag && *forceFlag {
 		fmt.Println("Destroying the infrastructure by running Terraform destroy command")
@@ -175,7 +182,10 @@ func main() {
 			return
 		}
 		deleteGeneratedFiles()
+		return
 	}
+
+	flagsHelp()
 }
 
 // This function executes the terraform command, Can be either apply or destroy.
@@ -228,8 +238,8 @@ func installRegistry(clusterFlag bool, pullSecretPath string, publicKeyPath stri
 				sendInstallConfigToAgent(installConfig, infraDetailsStatus.InstancePublicDNS)
 				populateActionAndVersion(true, clusterVersion)
 				// We need to let the mirror-registry to initialize properly before we run the installation script.
-				fmt.Println("Waiting for 1 minute to make sure everything initialized normally")
-				time.Sleep(1 * time.Minute)
+				fmt.Println("Waiting for 5 minutes to make sure everything initialized normally")
+				time.Sleep(3 * time.Minute)
 				sendActionAndVersionToAgent(infraDetailsStatus.InstancePublicDNS)
 				break
 			} else if agentRegistryStatus && agentStatus.ClusterStatus == "Exists" {
