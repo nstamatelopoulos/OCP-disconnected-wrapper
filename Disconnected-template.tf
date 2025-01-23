@@ -3,7 +3,7 @@ provider "aws" {
 }
 
 data "aws_region" "current" {}
-
+# test
 resource "aws_vpc" "disconnected-vpc" {
   cidr_block       = "10.0.0.0/16"
   instance_tenancy = "default"

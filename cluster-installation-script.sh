@@ -4,7 +4,7 @@
 echo "Starting Cluster Installation script"
 #==============================
 # Creating some variables
-#==============================
+#=================================
 
 homedir=/home/ec2-user
 
