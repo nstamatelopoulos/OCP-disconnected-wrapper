@@ -91,7 +91,8 @@ func checkRegionString(regions map[string]string, region string) {
 }
 
 func checkClusterVersionString(clusterVersion string) {
-	regexPattern := `^4\.(1[0-7]|[0-9])\.(60|[0-5]?[0-9])$`
+	//regexPattern := `^4\.(1[0-7]|[0-9])\.(60|[0-5]?[0-9])$`
+	regexPattern := `^4\.(2[0-5]|1[0-9]|[0-9])\.(60|[0-5]?[0-9])$`
 	matched, err := regexp.MatchString(regexPattern, clusterVersion)
 	if err != nil {
 		fmt.Println("Error in regular expression:", err)
