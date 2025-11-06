@@ -103,7 +103,7 @@ resource "aws_key_pair" "registry-key-pair" {
 
 resource "aws_instance" "mirror-registry" {
   ami           = var.Ami_Id
-  instance_type = "c5.xlarge"
+  instance_type = "c5.4xlarge"
   key_name      = aws_key_pair.registry-key-pair.key_name
 
   subnet_id     = aws_subnet.registry-subnet.id
