@@ -23,6 +23,7 @@ resource "aws_subnet" "registry-subnet" {
 
   tags = {
     Name = "registry-subnet"
+    "kubernetes.io/cluster/unmanaged" = "true"
   }
 }
 
