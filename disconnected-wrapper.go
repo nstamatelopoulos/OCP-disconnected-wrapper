@@ -18,7 +18,7 @@ const (
 	pullSecretTemplate     = "pull-secret.template"
 	initFileName           = "initData.json"
 	CAcert                 = "CAcert.pem"
-	releaseVersion         = "v2.3"
+	releaseVersion         = "v2.7"
 )
 
 // All RHEL 9 AMI images for all regions under our AWS lab account

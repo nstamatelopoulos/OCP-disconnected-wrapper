@@ -26,11 +26,8 @@ echo "Create the imageset-config.yaml file"
 
 if ! [ -f $homedir/mirroring-workspace/imageset-config.yaml ]; then
 cat <<EOF > "$homedir/mirroring-workspace/imageset-config.yaml"
-apiVersion: mirror.openshift.io/v1alpha2
+apiVersion: mirror.openshift.io/v2alpha1
 kind: ImageSetConfiguration
-storageConfig:
-  local:
-    path: /home/ec2-user/mirroring-workspace/oc-mirror-metadata
 mirror:
   platform:
     channels:
@@ -116,7 +113,8 @@ export SSL_CERT_FILE=$homedir/registry-stuff/quay-rootCA/rootCA.pem
 cd $homedir/mirroring-workspace
 
 echo "Mirroring release images for version $CLUSTER_VERSION"
-oc-mirror --config $homedir/mirroring-workspace/imageset-config.yaml docker://$hostname:8443 --verbose 1
+#oc-mirror --config $homedir/mirroring-workspace/imageset-config.yaml docker://$hostname:8443 --verbose 1 --v1
+oc-mirror --v2 --workspace file://$homedir/mirroring-workspace -c $homedir/mirroring-workspace/imageset-config.yaml docker://$(hostname):8443 --log-level debug
 
 cd $homedir/cluster
 
